@@ -418,14 +418,24 @@ function setAnim(ch,name){
   ch.curAnim=name;
 }
 
-// ===== コイン =====
-const coinMat=new THREE.MeshStandardMaterial({color:'#2156c4',roughness:0.3,metalness:0.55,emissive:'#0a1f55',emissiveIntensity:0.2});
-const coinGeo=new THREE.CylinderGeometry(0.3,0.3,0.62,18);
+// ===== コイン（光る金貨＝ひと目で取れると分かる）=====
+const coinMat=new THREE.MeshStandardMaterial({color:'#ffd633',roughness:0.22,metalness:0.7,emissive:'#d49a10',emissiveIntensity:0.65});
+const coinRimMat=new THREE.MeshStandardMaterial({color:'#e8a800',roughness:0.3,metalness:0.8,emissive:'#8a5e00',emissiveIntensity:0.5});
+const coinGeo=new THREE.CylinderGeometry(0.46,0.46,0.13,24);
+const coinGlowTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
+  const g=x.createRadialGradient(64,64,4,64,64,62); g.addColorStop(0,'rgba(255,228,90,.85)'); g.addColorStop(0.5,'rgba(255,205,50,.35)'); g.addColorStop(1,'rgba(255,200,40,0)');
+  x.fillStyle=g; x.fillRect(0,0,128,128); return new THREE.CanvasTexture(cv);})();
 const coins=[];
-function spawnCoins(z){const lx=-2.2+Math.random()*4.4; const n=3+((Math.random()*4)|0); const h=Math.random()<0.3?2.2:0.9;
-  for(let i=0;i<n;i++){const c=new THREE.Mesh(coinGeo,coinMat);
-    c.position.set(lx,h,z-i*1.6); c.castShadow=true; scene.add(c);
-    c.userData={alive:true}; coins.push(c);} }
+function makeCoin(){ const g=new THREE.Group();
+  const spin=new THREE.Group(); g.add(spin);
+  const disc=new THREE.Mesh(coinGeo,coinMat); disc.rotation.x=Math.PI/2; disc.castShadow=true; spin.add(disc);            // 正面を向く金貨
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(0.46,0.07,8,24),coinRimMat); spin.add(rim);                            // 縁取り
+  const star=new THREE.Mesh(new THREE.CircleGeometry(0.22,5),new THREE.MeshStandardMaterial({color:'#fff3b0',emissive:'#c89800',emissiveIntensity:0.5,metalness:0.6,roughness:0.3})); star.position.z=0.08; spin.add(star); // 中央の刻印
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7),new THREE.MeshBasicMaterial({map:coinGlowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  g.add(glow); g.userData={alive:true,spin,glow}; return g; }
+function spawnCoins(z){const lx=-2.2+Math.random()*4.4; const n=4+((Math.random()*4)|0); const h=Math.random()<0.3?2.2:1.0;
+  for(let i=0;i<n;i++){const c=makeCoin();
+    c.position.set(lx,h,z-i*1.6); scene.add(c); coins.push(c);} }
 
 // ===== エメラルドの星（取ると金スターに20秒変身）=====
 const starShape=(()=>{ const sh=new THREE.Shape(); const sp=5,oR=0.5,iR=0.22;
@@ -815,12 +825,13 @@ function frame(now){
     }
     if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
   }
-  // 缶（旧コイン）：レーンが合っていれば取得。25個で1UP
+  // コイン（光る金貨）：レーンが合っていれば取得。25個で1UP
   for(let i=coins.length-1;i>=0;i--){const c=coins[i];
-    c.position.z+=ws*dt; c.rotation.y+=dt*4;
-    if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.0){
-      const cy=c.position.y; if(cy>cb.bottom-0.3 && cy<cb.top+0.3){
-        c.userData.alive=false; coinCount++; score+=20; spawnPop(c.position.x,c.position.y,'#7fd0ff'); sfx('coin');
+    c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5; c.userData.glow.lookAt(camera.position);
+    c.position.y += Math.sin(t*4+c.position.x)*0.004;   // ふわふわ
+    if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.1){
+      const cy=c.position.y; if(cy>cb.bottom-0.4 && cy<cb.top+0.4){
+        c.userData.alive=false; coinCount++; score+=20; spawnPop(c.position.x,c.position.y,'#ffd84a'); sfx('coin');
         if(coinCount%25===0 && hp<HP_MAX){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); }
         scene.remove(c); coins.splice(i,1); continue; }
     }
@@ -921,7 +932,7 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
   get px(){return px;}, get pvx(){return pvx;}, get hp(){return hp;}, get mode(){return mode;},
   startChase(){startChase();}, endChase(){endChase();},
   emerald(){powerT=20;},
-  spawnOb(){spawnObstacle();}, spawnPat(){spawnPattern();}, kill(){gameOver();}, setScroll(v){scroll=v;},
+  spawnOb(){spawnObstacle();}, spawnPat(){spawnPattern();}, spawnCoins(z){spawnCoins(z==null?SPZ-6:z);}, kill(){gameOver();}, setScroll(v){scroll=v;},
   setFootLift(v){FOOT_LIFT=v;}, get footLift(){return FOOT_LIFT;},
   get deadT(){return deadT;}, render(){renderer.render(scene,camera);},
   stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}}
