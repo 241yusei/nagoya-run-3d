@@ -53,11 +53,13 @@
     text-align:center;z-index:50;cursor:pointer;pointer-events:auto}
   #startinner{display:flex;flex-direction:column;align-items:center;animation:sfade .55s ease-out}
   @keyframes sfade{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  #logo{font-size:62px;font-weight:900;color:#fff;letter-spacing:1px;line-height:.95;
-    text-shadow:0 4px 0 #b4863a,0 7px 20px rgba(0,0,0,.55)}
-  #logo span{color:#ffd84a}
-  #logo3d{font-size:32px;font-weight:900;color:#e8362e;-webkit-text-stroke:2px #fff;margin-top:4px;
-    text-shadow:0 3px 12px rgba(0,0,0,.5)}
+  #logo{font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;font-size:68px;font-weight:900;
+    letter-spacing:-.025em;line-height:.9;white-space:nowrap;color:#111;
+    text-shadow:0 0 7px rgba(255,255,255,.95),0 0 16px rgba(255,255,255,.8),0 4px 12px rgba(0,0,0,.4)}
+  #logo .ln1,#logo .ln2{color:#111}
+  #logo .ln3{color:#e8362e}
+  #logo3d{font-size:26px;font-weight:900;color:#e8362e;letter-spacing:2px;margin-top:2px;
+    text-shadow:0 0 7px rgba(255,255,255,.95),0 2px 8px rgba(0,0,0,.35)}
   #tagline{margin-top:16px;font-size:18px;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.65)}
   #startbtn{margin-top:26px;background:#e8362e;color:#fff;border:0;border-radius:46px;
     font-size:26px;font-weight:900;padding:18px 66px;cursor:pointer;pointer-events:auto;
@@ -67,7 +69,7 @@
   #startctrl{margin-top:24px;display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;
     color:#e7ecf5;text-shadow:0 2px 6px rgba(0,0,0,.6)}
   #starttip{margin-top:16px;font-size:12px;color:#cdd6e6;text-shadow:0 2px 6px rgba(0,0,0,.6)}
-  @media (max-width:520px){ #logo{font-size:44px} #logo3d{font-size:24px} #startbtn{font-size:22px;padding:15px 48px} }
+  @media (max-width:520px){ #logo{font-size:34px} #logo3d{font-size:20px} #startbtn{font-size:22px;padding:15px 48px} }
 </style>
 </head>
 <body>
@@ -85,7 +87,7 @@
 <div id="banner"></div>
 <div id="over"><h1>GAME OVER</h1><p id="ovs"></p><button id="retry">RETRY</button></div>
 <div id="start"><div id="startinner">
-  <div id="logo">NAGOYA NINGEN <span>RUN</span></div>
+  <div id="logo"><span class="ln1">Nagoya</span><span class="ln2">NINGEN</span><span class="ln3">RUN</span></div>
   <div id="logo3d">3D</div>
   <div id="tagline">Dash through the streets of Nagoya!</div>
   <button id="startbtn">▶ START</button>
