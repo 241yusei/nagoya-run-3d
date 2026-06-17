@@ -93,25 +93,31 @@ Object.assign(sun.shadow.camera,{near:1,far:80,left:-22,right:22,top:24,bottom:-
 sun.shadow.bias=-0.0004; sun.shadow.radius=5; scene.add(sun);
 const fill=new THREE.DirectionalLight('#ffe7c8',0.42); fill.position.set(10,8,-6); scene.add(fill);
 
-// ===== 道路（実写アスファルト＋車線ペイント）=====
+// ===== 道路（カーブ・勾配する分割メッシュ：頂点を毎フレーム変位）=====
 const ROADW=7, FARZ=-220, NEARZ=14;
 const roadTex=new THREE.TextureLoader().load('ui/road.jpg');
 roadTex.wrapS=roadTex.wrapT=THREE.RepeatWrapping; roadTex.repeat.set(2,260); roadTex.anisotropy=8; roadTex.encoding=THREE.sRGBEncoding;
 const ROAD_TILE=1000/260;   // 1リピートのワールド長
-const road=new THREE.Mesh(new THREE.PlaneGeometry(ROADW,1000),
-  new THREE.MeshStandardMaterial({map:roadTex,color:'#b3b0a8',roughness:0.9}));   // 明るめ・暖色寄り
-road.rotation.x=-Math.PI/2; road.position.z=-400; road.receiveShadow=true; scene.add(road);
-// 歩道（縁石）
+const groundStrips=[];
+function makeStrip(w, mat, y, xoff){
+  const g=new THREE.PlaneGeometry(w,1000,1,160); g.rotateX(-Math.PI/2);   // XZ平面・長さ方向160分割
+  const m=new THREE.Mesh(g,mat); m.position.set(xoff||0,y,-400); m.receiveShadow=true; scene.add(m);
+  const pos=g.attributes.position, n=pos.count, ox=new Float32Array(n), oz=new Float32Array(n);
+  for(let i=0;i<n;i++){ ox[i]=pos.getX(i); oz[i]=pos.getZ(i); }
+  groundStrips.push({geo:g,mesh:m,ox,oz}); return m;
+}
+makeStrip(ROADW, new THREE.MeshStandardMaterial({map:roadTex,color:'#b3b0a8',roughness:0.9}), 0, 0);             // 道路
 const curbMat=new THREE.MeshStandardMaterial({color:'#cfc9bd',roughness:1});
-[-1,1].forEach(s=>{const m=new THREE.Mesh(new THREE.BoxGeometry(7,0.5,1000),curbMat);
-  m.position.set(s*(ROADW/2+3.5),0.25,-400); m.receiveShadow=true; m.castShadow=true; scene.add(m);});
-// 白い車線ペイント
+[-1,1].forEach(s=> makeStrip(7, curbMat, 0.04, s*(ROADW/2+3.5)) );                                                // 歩道
 const lineMat=new THREE.MeshStandardMaterial({color:'#eef0ec',roughness:0.55,emissive:'#39392f',emissiveIntensity:0.12});
-[-1,1].forEach(s=>{const e=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.04,1000),lineMat); // 路肩の実線
-  e.position.set(s*(ROADW/2-0.55),0.03,-400); scene.add(e);});
+[-1,1].forEach(s=> makeStrip(0.16, lineMat, 0.05, s*(ROADW/2-0.55)) );                                            // 路肩の実線
+// 道路・歩道・路肩線をカーブ/勾配へ追従（頂点変位）
+function updateStrips(){ for(const s of groundStrips){ const pos=s.geo.attributes.position, zoff=s.mesh.position.z;
+  for(let i=0;i<pos.count;i++){ const wz=s.oz[i]+zoff; pos.setX(i, s.ox[i]+curveOffsetX(wz)); pos.setY(i, groundY(wz)); }
+  pos.needsUpdate=true; } }
 const dashMat=lineMat;
-const dashes=[]; for(let i=0;i<60;i++){const d=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.04,2.4),dashMat); // 中央の破線
-  d.position.set(0,0.03,-i*5); d.receiveShadow=true; scene.add(d); dashes.push(d);}
+const dashes=[]; for(let i=0;i<60;i++){const d=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.04,2.4),dashMat);   // 中央の破線（スクロール＋カーブ）
+  d.position.set(0,0.05,-i*5); d.userData={baseX:0,baseY:0.05}; scene.add(d); dashes.push(d);}
 
 // ===== カートゥーンの街並み（明るい店舗ビル）=====
 const buildings=[];
@@ -502,7 +508,7 @@ const BUILD={
   enemy(g){ const m=placeModel('enemy',1.5,Math.PI);
     if(m){ g.add(m); } else { const body=mesh(new THREE.SphereGeometry(0.5,16,14),M('#e0518a'),0.5); body.scale.y=1.1; g.add(body); }
     g.userData.act='jump'; g.userData.thr=1.45;
-    g.userData.upd=(o,t)=>{ if(o.children[0])o.children[0].position.y=Math.abs(Math.sin(t*5))*0.22; o.position.x=o.userData.baseX+Math.sin(t*1.8)*0.32; }; },
+    g.userData.upd=(o,t)=>{ o.userData.hopY=Math.abs(Math.sin(t*5))*0.22; o.userData.swayX=o.userData.baseX+Math.sin(t*1.8)*0.32; }; },
   // 三角コーン：レーン移動で避ける（低い・ぶつかると減速）
   cone(g){ g.add(mesh(new THREE.ConeGeometry(0.42,1.0,16),M('#ff7a1a',0.7),0.5));
     g.add(mesh(new THREE.CylinderGeometry(0.5,0.5,0.08,16),M('#222',0.6),0.04));
@@ -563,6 +569,27 @@ const FOV_BASE=48; let fovKick=0;
 let hitstop=0, slowmo=0;
 let mode='run', nextChaseAt=600, chaseEnd=0, chaseGap=1, pursuer=null; // チェイス演出
 let lastSection=0;                 // 区間（難易度段階）
+// ===== カーブ（疑似スプライン：zに応じて全スクロール物のxをずらす）=====
+let curveK=0, curveTargetK=0, curveNextAt=140;
+const curveOffsetX=(z)=>curveK*z*z*0.5;        // 奥ほど横へ流れる＝道がカーブして見える
+// ===== 勾配（zに応じて高さを変える）=====
+let slopeK=0, slopeTargetK=0, slopeNextAt=220;
+const groundY=(z)=>slopeK*z;                    // 奥(z<0)が高い=上り / 低い=下り
+// スクロール物にカーブ(x)・勾配(y)を反映。baseX/baseY未設定なら現在値で初期化
+function curveMove(o){ const u=o.userData;
+  if(u.baseX==null)u.baseX=o.position.x; if(u.baseY==null)u.baseY=o.position.y;
+  o.position.x=(u.swayX!=null?u.swayX:u.baseX)+curveOffsetX(o.position.z);
+  o.position.y=u.baseY+groundY(o.position.z)+(u.hopY||0); }
+// ===== ステージ（街→高速→川/橋→工事→栄。空・霧・速度・カーブ感が変わる）=====
+const STAGES=[
+  {n:'ナゴヤの街',  from:0,    sky:'#8fcdf0', fog:'#d4ecf7', spd:11, cAmp:0.006, sAmp:0.03},
+  {n:'名古屋高速',  from:520,  sky:'#a8c6e2', fog:'#cfdcea', spd:13, cAmp:0.011, sAmp:0.07},
+  {n:'堀川・橋',    from:1080, sky:'#9fd6e2', fog:'#cfeef2', spd:14, cAmp:0.009, sAmp:0.04},
+  {n:'工事現場',    from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
+  {n:'栄の夜',      from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
+];
+function curStage(){ for(let i=STAGES.length-1;i>=0;i--) if(scroll>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
+let lastStage=null;
 const CAM_CHASE=new THREE.Vector3(0,5.8,-15.5);  // チェイス時：前方やや高めから振り返る（金鯱を見せる）
 let chaseCam=0, camBaseX=0;        // カメラのモード遷移補間 / 揺れを除いた基準x
 const pops=[];                     // 取得演出の小物
@@ -649,6 +676,8 @@ function reset(){
   score=0; coinCount=0; nextOb=0; nextCoin=-6; powerT=0; deadT=0; gameTime=0;
   px=0; pvx=0; steerDir=0; invertCtl=false; dashT=0; dashCD=0; invulnT=0; knockT=0; knockVz=0; hp=HP_MAX; fovKick=0; hitstop=0; slowmo=0;
   mode='run'; nextChaseAt=600; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
+  curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null;
+  scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
   atkPhase='idle'; atkT=0; if(warnMesh)warnMesh.visible=false;
   if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0';
   // スターは1ゲームに1〜2回だけ出現（出現距離をランダムに予約）
@@ -721,10 +750,19 @@ function frame(now){
   t+=dt;
 
   if(state==='run'){
-    // ペプシマン式：区間内はほぼ一定速。区間ごとに段階的に上げる
-    const sec = scroll<240?0:scroll<540?1:scroll<900?2:3;
-    if(sec>lastSection){ lastSection=sec; baseSpeed=11+sec; banner('SECTION '+(sec+1),1300); }
-    speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0);
+    // ステージ切替（空・霧・速度・カーブ感が変わる）
+    const st=curStage();
+    if(st!==lastStage){ lastStage=st; baseSpeed=st.spd; banner(st.n,1700);
+      scene.background.set(st.sky); scene.fog.color.set(st.fog); }
+    // カーブ・勾配を距離で切替（ステージの強さ上限内で）
+    if(scroll>curveNextAt){ curveNextAt=scroll+90+Math.random()*120;
+      curveTargetK=(Math.random()<0.32)?0:(Math.random()<0.5?-1:1)*(st.cAmp*0.4+Math.random()*st.cAmp*0.6); }
+    curveK+=(curveTargetK-curveK)*(1-Math.exp(-1.2*dt));
+    if(scroll>slopeNextAt){ slopeNextAt=scroll+140+Math.random()*160;
+      slopeTargetK=(Math.random()<0.5)?0:(Math.random()<0.5?-1:1)*(st.sAmp*0.5+Math.random()*st.sAmp*0.5); }
+    slopeK+=(slopeTargetK-slopeK)*(1-Math.exp(-1.0*dt));
+    const downhill = slopeK<0 ? -slopeK*90 : (slopeK>0 ? -slopeK*30 : 0);   // 下りで加速・上りで微減速
+    speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0)+downhill;
     scroll+=speed*dt;
     score+=speed*dt*1.2;
     // ジャンプ物理
@@ -805,6 +843,9 @@ function frame(now){
       if(o.position.y<-7||o.position.z>16){scene.remove(o);obstacles.splice(i,1);} continue;
     }
     if(ud.upd && state==='run') ud.upd(o, t, dt, speed);
+    // カーブ・勾配を反映（足元z≈0ではオフセット0＝判定に影響なし）
+    o.position.x=(ud.swayX!=null?ud.swayX:ud.baseX)+curveOffsetX(o.position.z);
+    o.position.y=(ud.baseY||0)+groundY(o.position.z)+(ud.hopY||0);
     if(!ud.passed && o.position.z>-0.8 && o.position.z<0.8 && state==='run'){
       ud.passed=true;
       const xo=Math.abs(px-o.position.x);
@@ -826,8 +867,7 @@ function frame(now){
   }
   // コイン（光る金貨）：レーンが合っていれば取得。25個で1UP
   for(let i=coins.length-1;i>=0;i--){const c=coins[i];
-    c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5;
-    c.position.y += Math.sin(t*4+c.position.x)*0.004;   // ふわふわ
+    c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5; curveMove(c);   // カーブ/勾配
     if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.1){
       const cy=c.position.y; if(cy>cb.bottom-0.4 && cy<cb.top+0.4){
         c.userData.alive=false; coinCount++; score+=20; spawnPop(c.position.x,c.position.y,'#ffd84a'); sfx('coin');
@@ -839,7 +879,7 @@ function frame(now){
   // エメラルドの星（取ると20秒間 金スターに変身）
   for(let i=emeralds.length-1;i>=0;i--){const e=emeralds[i];
     e.position.z+=ws*dt; e.userData.star.rotation.y+=dt*2.6; e.userData.star.rotation.z=Math.sin(t*2)*0.18;
-    e.userData.glow.lookAt(camera.position);
+    e.userData.glow.lookAt(camera.position); curveMove(e);   // カーブ/勾配
     if(e.userData.alive && Math.abs(e.position.z)<0.95 && Math.abs(px-e.position.x)<1.1){
       const ey=e.position.y; if(ey>cb.bottom-0.6 && ey<cb.top+0.7){
         e.userData.alive=false; powerT=20; score+=100; camShake=0.3; spawnPop(e.position.x,e.position.y,'#5ff0b0'); sfx('star'); scene.remove(e); emeralds.splice(i,1); continue; }
@@ -853,14 +893,16 @@ function frame(now){
 
   // 道路ペイント・ビルのスクロール
   roadTex.offset.y -= ws*dt/ROAD_TILE;   // アスファルト面が流れて見える
-  dashes.forEach(d=>{d.position.z+=ws*dt; if(d.position.z>NEARZ)d.position.z-=60*5;});
+  updateStrips();                         // 道路・歩道・路肩線をカーブ/勾配へ
+  dashes.forEach(d=>{d.position.z+=ws*dt; if(d.position.z>NEARZ)d.position.z-=60*5; curveMove(d);});
   buildings.forEach(b=>{b.position.z+=ws*dt; b.userData.wins.forEach(w=>w.position.z+=ws*dt);
-    if(b.position.z>26){b.position.z-=BLEN; b.userData.wins.forEach(w=>w.position.z-=BLEN);}});
-  props.forEach(p=>{p.position.z+=ws*dt; if(p.position.z>NEARZ)p.position.z-=PROPLEN;});
+    if(b.position.z>26){b.position.z-=BLEN; b.userData.wins.forEach(w=>w.position.z-=BLEN);}
+    curveMove(b); b.userData.wins.forEach(w=>curveMove(w));});
+  props.forEach(p=>{p.position.z+=ws*dt; if(p.position.z>NEARZ)p.position.z-=PROPLEN; curveMove(p);});
   // ランドマーク（名古屋城・テレビ塔・オアシス21・セントラルタワーズ・観覧車）のスクロールと回転
   landmarks.forEach(g=>{ g.position.z+=ws*dt;
     if(g.userData.wheel) g.userData.wheel.rotation.z += (g.userData.spin||0)*dt;
-    if(g.position.z>40) g.position.z-=g.userData.span; });
+    if(g.position.z>40) g.position.z-=g.userData.span; curveMove(g); });
 
   // カメラ：通常＝中央背後で道路を真っ直ぐ／チェイス＝前方から振り返る。遷移は滑らかに補間、揺れは別加算
   chaseCam += ((mode==='chase'?1:0)-chaseCam)*(1-Math.exp(-7*dt));
@@ -873,8 +915,11 @@ function frame(now){
   const lx=lBx+(lCx-lBx)*chaseCam, ly=lBy+(lCy-lBy)*chaseCam, lz=lBz+(lCz-lBz)*chaseCam;
   camBaseX += (cx-camBaseX)*(1-Math.exp(-6*dt));                          // x はイージング（揺れを含めない）
   const shx=camShake?(Math.random()-0.5)*camShake:0, shy=camShake?(Math.random()-0.5)*camShake:0;
-  camera.position.set(camBaseX+shx, cy+shy, cz);
-  camera.lookAt(lx,ly,lz);
+  const nrm=1-chaseCam;                                                   // 通常時のみカーブ/勾配をカメラへ
+  const aheadX=curveOffsetX(-16)*nrm, aheadY=groundY(-16)*0.5*nrm;
+  camera.position.set(camBaseX+shx+curveOffsetX(cz)*0.2*nrm, cy+shy, cz);
+  camera.lookAt(lx+aheadX, ly+aheadY, lz);
+  camera.rotation.z += THREE.MathUtils.clamp(-curveK*55,-0.12,0.12)*nrm;  // カーブでバンク
   camera.fov=FOV_BASE+fovKick+chaseCam*5; camera.updateProjectionMatrix();
   if(camShake>0)camShake-=dt*1.6;
   // 追跡者（金鯱）：チェイス中、背後(+z)からgapに応じて迫る
@@ -933,6 +978,10 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
   emerald(){powerT=20;},
   spawnOb(){spawnObstacle();}, spawnPat(){spawnPattern();}, spawnCoins(z){spawnCoins(z==null?SPZ-6:z);}, kill(){gameOver();}, setScroll(v){scroll=v;},
   setFootLift(v){FOOT_LIFT=v;}, get footLift(){return FOOT_LIFT;},
+  setCurve(k){curveK=k;curveTargetK=k;}, setSlope(k){slopeK=k;slopeTargetK=k;}, get curveK(){return curveK;},
+  previewCurve(){ updateStrips(); obstacles.forEach(curveMove); coins.forEach(curveMove); emeralds.forEach(curveMove);
+    dashes.forEach(curveMove); buildings.forEach(b=>{curveMove(b);b.userData.wins.forEach(curveMove);}); props.forEach(curveMove); landmarks.forEach(curveMove);
+    renderer.render(scene,camera); },
   get deadT(){return deadT;}, render(){renderer.render(scene,camera);},
   stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}}
 };
