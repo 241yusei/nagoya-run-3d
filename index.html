@@ -419,19 +419,19 @@ function setAnim(ch,name){
 }
 
 // ===== コイン（光る金貨＝ひと目で取れると分かる）=====
-const coinMat=new THREE.MeshStandardMaterial({color:'#ffd633',roughness:0.22,metalness:0.7,emissive:'#d49a10',emissiveIntensity:0.65});
-const coinRimMat=new THREE.MeshStandardMaterial({color:'#e8a800',roughness:0.3,metalness:0.8,emissive:'#8a5e00',emissiveIntensity:0.5});
+const coinMat=new THREE.MeshStandardMaterial({color:'#ffd02a',roughness:0.28,metalness:0.65,emissive:'#a87410',emissiveIntensity:0.32});
+const coinRimMat=new THREE.MeshStandardMaterial({color:'#e8a800',roughness:0.32,metalness:0.75,emissive:'#6a4600',emissiveIntensity:0.3});
 const coinGeo=new THREE.CylinderGeometry(0.46,0.46,0.13,24);
 const coinGlowTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
-  const g=x.createRadialGradient(64,64,4,64,64,62); g.addColorStop(0,'rgba(255,228,90,.85)'); g.addColorStop(0.5,'rgba(255,205,50,.35)'); g.addColorStop(1,'rgba(255,200,40,0)');
+  const g=x.createRadialGradient(64,64,10,64,64,60); g.addColorStop(0,'rgba(255,220,90,.32)'); g.addColorStop(0.6,'rgba(255,205,60,.12)'); g.addColorStop(1,'rgba(255,200,40,0)');
   x.fillStyle=g; x.fillRect(0,0,128,128); return new THREE.CanvasTexture(cv);})();
 const coins=[];
 function makeCoin(){ const g=new THREE.Group();
   const spin=new THREE.Group(); g.add(spin);
   const disc=new THREE.Mesh(coinGeo,coinMat); disc.rotation.x=Math.PI/2; disc.castShadow=true; spin.add(disc);            // 正面を向く金貨
   const rim=new THREE.Mesh(new THREE.TorusGeometry(0.46,0.07,8,24),coinRimMat); spin.add(rim);                            // 縁取り
-  const star=new THREE.Mesh(new THREE.CircleGeometry(0.22,5),new THREE.MeshStandardMaterial({color:'#fff3b0',emissive:'#c89800',emissiveIntensity:0.5,metalness:0.6,roughness:0.3})); star.position.z=0.08; spin.add(star); // 中央の刻印
-  const glow=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7),new THREE.MeshBasicMaterial({map:coinGlowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  const star=new THREE.Mesh(new THREE.CircleGeometry(0.22,5),new THREE.MeshStandardMaterial({color:'#fff0a0',emissive:'#9a7400',emissiveIntensity:0.25,metalness:0.6,roughness:0.35})); star.position.z=0.08; spin.add(star); // 中央の刻印
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.95),new THREE.MeshBasicMaterial({map:coinGlowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
   g.add(glow); g.userData={alive:true,spin,glow}; return g; }
 function spawnCoins(z){const lx=-2.2+Math.random()*4.4; const n=4+((Math.random()*4)|0); const h=Math.random()<0.3?2.2:1.0;
   for(let i=0;i<n;i++){const c=makeCoin();
