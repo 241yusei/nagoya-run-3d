@@ -47,6 +47,27 @@
   #timer{font-size:15px;font-variant-numeric:tabular-nums;min-width:54px;text-align:right}
   #cans{flex:0 0 auto;font-size:15px;display:flex;align-items:center;gap:3px}
   #cans b{font-size:24px}
+  /* ===== スタート画面 ===== */
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(10,14,26,.34) 0%,rgba(10,14,26,.04) 40%,rgba(10,14,26,.52) 100%);
+    text-align:center;z-index:50;cursor:pointer;pointer-events:auto}
+  #startinner{display:flex;flex-direction:column;align-items:center;animation:sfade .55s ease-out}
+  @keyframes sfade{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  #logo{font-size:62px;font-weight:900;color:#fff;letter-spacing:1px;line-height:.95;
+    text-shadow:0 4px 0 #b4863a,0 7px 20px rgba(0,0,0,.55)}
+  #logo span{color:#ffd84a}
+  #logo3d{font-size:32px;font-weight:900;color:#e8362e;-webkit-text-stroke:2px #fff;margin-top:4px;
+    text-shadow:0 3px 12px rgba(0,0,0,.5)}
+  #tagline{margin-top:16px;font-size:18px;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.65)}
+  #startbtn{margin-top:26px;background:#e8362e;color:#fff;border:0;border-radius:46px;
+    font-size:26px;font-weight:900;padding:18px 66px;cursor:pointer;pointer-events:auto;
+    box-shadow:0 10px 28px rgba(232,54,46,.5);animation:spulse 1.5s ease-in-out infinite}
+  #startbtn:active{transform:scale(.96)}
+  @keyframes spulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  #startctrl{margin-top:24px;display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;
+    color:#e7ecf5;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  #starttip{margin-top:16px;font-size:12px;color:#cdd6e6;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  @media (max-width:520px){ #logo{font-size:44px} #logo3d{font-size:24px} #startbtn{font-size:22px;padding:15px 48px} }
 </style>
 </head>
 <body>
@@ -63,6 +84,17 @@
 <div id="vig"></div>
 <div id="banner"></div>
 <div id="over"><h1>ゲームオーバー</h1><p id="ovs"></p><button id="retry">リトライ</button></div>
+<div id="start"><div id="startinner">
+  <div id="logo">ナゴヤ人間<span>RUN</span></div>
+  <div id="logo3d">3D</div>
+  <div id="tagline">名古屋の街を駆け抜けろ！</div>
+  <button id="startbtn">▶ スタート</button>
+  <div id="startctrl">
+    <span>移動：← →／画面左右ホールド　・　ジャンプ：↑／上スワイプ</span>
+    <span>スライド：↓／下スワイプ　・　ダッシュ：Shift／ダブルタップ</span>
+  </div>
+  <div id="starttip">🥤 コインを集めて避けて走れ ／ ステージごとに巨大ボスが追ってくる</div>
+</div></div>
 <script src="libs/three.min.js"></script>
 <script src="libs/GLTFLoader.js"></script>
 <script>
@@ -585,7 +617,7 @@ function spawnPattern(){
 function spawnObstacle(){ return spawnPattern()||0; }
 
 // ===== ゲーム状態 =====
-let state='run', t=0, scroll=0, speed=11, baseSpeed=11;
+let state='title', t=0, scroll=0, speed=11, baseSpeed=11;   // 起動時はタイトル画面
 let py=0, vy=0, grounded=true, sliding=false, slideT=0;
 let score=0, coinCount=0, nextOb=0, nextCoin=-6, deadT=0, starsPlan=[];
 const GRAV=50, JUMP=16, DEAD_LIFT=0.55; // 転倒アニメで地面にめり込む分を持ち上げる
@@ -730,6 +762,16 @@ addEventListener('pointerup',e=>{ if(e.pointerId===steerPid){ steerDir=0; steerP
 });
 addEventListener('pointercancel',e=>{ if(e.pointerId===steerPid){steerDir=0;steerPid=null;} });
 document.getElementById('retry').addEventListener('click',restart);
+// ===== スタート画面：起動時はタイトル。ボタン/画面タップ/Enter/Spaceで開始 =====
+const elStart=document.getElementById('start'), elHud=document.getElementById('hud'), elHint=document.getElementById('hint');
+function showTitle(){ state='title'; if(elStart)elStart.style.display='flex'; if(elHud)elHud.style.visibility='hidden'; if(elHint)elHint.style.visibility='hidden'; }
+function startGame(){ if(state!=='title')return; startBgm();
+  if(elStart)elStart.style.display='none'; if(elHud)elHud.style.visibility='visible'; if(elHint)elHint.style.visibility='visible';
+  reset();   // ここで state='run' になり全リセット
+}
+if(elStart){ elStart.addEventListener('pointerdown',e=>{ e.stopPropagation(); startGame(); }); }
+addEventListener('keydown',e=>{ if(state==='title'&&(e.code==='Enter'||e.code==='Space')){ e.preventDefault(); startGame(); } });
+showTitle();   // 初期表示
 
 function reset(){
   obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
@@ -909,7 +951,8 @@ function frame(now){
   if(modelReady&&activeChar){
     const ch=activeChar;
     if(state==='run'){ setAnim(ch, sliding ? ANIM_FOR.slide : (!grounded ? ANIM_FOR.jump : ANIM_FOR.run) ); }
-    ch.mixer.update((state==='run'||state==='dead')?dt:0);   // dead中はノックダウンを再生
+    else if(state==='title'){ setAnim(ch, ANIM_FOR.run); }   // タイトル中はその場で走る
+    ch.mixer.update((state==='run'||state==='dead'||state==='title')?dt:0);   // dead中はノックダウン／title中は走り
     if(ch.hips&&ch.hipsBind){ ch.hips.position.x=ch.hipsBind.x; ch.hips.position.z=ch.hipsBind.z; }
     ch.holder.position.x = px;
     ch.holder.position.y = py + (state==='dead' ? DEAD_LIFT*Math.min(1,deadT*2) : FOOT_LIFT);
@@ -923,8 +966,8 @@ function frame(now){
   // スケートボード：ライド中だけ足元に表示・横速度で傾く
   if(board){ board.visible=rideT>0; if(rideT>0){ board.position.set(px, py+0.02, 0.05); board.rotation.z=-pvx*0.05; } }
 
-  // dead中はワールドを停止（コースを止める）。スマッシュした破片だけは慣性で飛ぶ
-  const ws = (state==='run') ? speed : 0;
+  // dead中はワールドを停止（コースを止める）。タイトル中はゆっくり流す（アトラクト演出）
+  const ws = (state==='run') ? speed : (state==='title' ? 5 : 0);
   // 障害物の移動・動き・当たり判定（無敵中はスマッシュ）
   const cb=charBox();
   for(let i=obstacles.length-1;i>=0;i--){const o=obstacles[i]; const ud=o.userData;
