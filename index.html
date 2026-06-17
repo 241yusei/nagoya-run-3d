@@ -953,12 +953,18 @@ function frame(now){
   // アニメ・姿勢（走り/ジャンプ/スライドをクロスフェード＋ルートモーション打ち消し）
   if(modelReady&&activeChar){
     const ch=activeChar;
-    if(state==='run'){ setAnim(ch, sliding ? ANIM_FOR.slide : (!grounded ? ANIM_FOR.jump : ANIM_FOR.run) ); }
+    if(state==='run' && rideT>0){
+      // スケボー：しゃがみタック姿勢を保持（走りモーションを止める）＋膝を微小フレックス
+      if(ch.curAnim!=='__skate'){ if(ch.ACT[ch.curAnim])ch.ACT[ch.curAnim].stop(); const a=ch.ACT['Regular_Jump']; a.reset().setEffectiveWeight(1).play(); a.paused=true; ch._skateA=a; ch.curAnim='__skate'; }
+      if(ch._skateA) ch._skateA.time = 0.36 + Math.sin(t*5)*0.04;
+    }
+    else if(state==='run'){ if(ch.curAnim==='__skate'){ if(ch._skateA)ch._skateA.stop(); ch.curAnim=null; } // スケボー解除
+      setAnim(ch, sliding ? ANIM_FOR.slide : (!grounded ? ANIM_FOR.jump : ANIM_FOR.run) ); }
     else if(state==='title'){ setAnim(ch, ANIM_FOR.run); }   // タイトル中はその場で走る
     ch.mixer.update((state==='run'||state==='dead'||state==='title')?dt:0);   // dead中はノックダウン／title中は走り
     if(ch.hips&&ch.hipsBind){ ch.hips.position.x=ch.hipsBind.x; ch.hips.position.z=ch.hipsBind.z; }
     ch.holder.position.x = px;
-    ch.holder.position.y = py + (state==='dead' ? DEAD_LIFT*Math.min(1,deadT*2) : FOOT_LIFT);
+    ch.holder.position.y = py + (state==='dead' ? DEAD_LIFT*Math.min(1,deadT*2) : (rideT>0 ? FOOT_LIFT+0.17 : FOOT_LIFT));  // スケボー中は板の分だけ持ち上げ
     ch.holder.position.z = (state==='run'&&knockT>0) ? Math.sin(knockT/0.5*Math.PI)*1.4 : 0; // 後方ノックバック
     ch.holder.rotation.z = state==='dead'?0:-pvx*0.045;                                       // 横速度で傾く
     ch.holder.visible = (state==='run'&&invulnT>0&&powerT<=0) ? (Math.sin(t*40)>0) : true; // 被弾点滅
