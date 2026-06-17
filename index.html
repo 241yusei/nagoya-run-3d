@@ -431,8 +431,7 @@ function makeCoin(){ const g=new THREE.Group();
   const disc=new THREE.Mesh(coinGeo,coinMat); disc.rotation.x=Math.PI/2; disc.castShadow=true; spin.add(disc);            // 正面を向く金貨
   const rim=new THREE.Mesh(new THREE.TorusGeometry(0.46,0.07,8,24),coinRimMat); spin.add(rim);                            // 縁取り
   const star=new THREE.Mesh(new THREE.CircleGeometry(0.22,5),new THREE.MeshStandardMaterial({color:'#fff0a0',emissive:'#9a7400',emissiveIntensity:0.25,metalness:0.6,roughness:0.35})); star.position.z=0.08; spin.add(star); // 中央の刻印
-  const glow=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.95),new THREE.MeshBasicMaterial({map:coinGlowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
-  g.add(glow); g.userData={alive:true,spin,glow}; return g; }
+  g.userData={alive:true,spin}; return g; }
 function spawnCoins(z){const lx=-2.2+Math.random()*4.4; const n=4+((Math.random()*4)|0); const h=Math.random()<0.3?2.2:1.0;
   for(let i=0;i<n;i++){const c=makeCoin();
     c.position.set(lx,h,z-i*1.6); scene.add(c); coins.push(c);} }
@@ -827,7 +826,7 @@ function frame(now){
   }
   // コイン（光る金貨）：レーンが合っていれば取得。25個で1UP
   for(let i=coins.length-1;i>=0;i--){const c=coins[i];
-    c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5; c.userData.glow.lookAt(camera.position);
+    c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5;
     c.position.y += Math.sin(t*4+c.position.x)*0.004;   // ふわふわ
     if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.1){
       const cy=c.position.y; if(cy>cb.bottom-0.4 && cy<cb.top+0.4){
