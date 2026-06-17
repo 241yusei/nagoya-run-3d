@@ -502,7 +502,7 @@ function mesh(g,m,y){const x=new THREE.Mesh(g,m);x.position.y=y||0;x.castShadow=
 // Meshyで生成した3Dモデル（金鯱・車・敵）を事前ロード→クローンで使い回す
 const MODELS={};
 ['shachi','car','enemy','tree','shop','house','c_castle','c_tower','c_oasis','c_arena','c_science','c_taiyo','c_osu',
- 'ex_pillar','guardrail','truss','crane','barricade','neon','crowd','g_truck','g_ebi'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
+ 'ex_pillar','guardrail','truss','crane','barricade','neon','crowd','g_truck2','g_ebi'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
   const m=g.scene; m.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.frustumCulled=false; if(o.material&&o.material.map)o.material.map.encoding=THREE.sRGBEncoding;} });
   const b=new THREE.Box3().setFromObject(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
   MODELS[name]={scene:m, h0:sz.y||1, cx:c.x, cz:c.z, minY:b.min.y};
@@ -824,15 +824,16 @@ function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner
   elBanner.style.animation='none'; void elBanner.offsetWidth; elBanner.style.animation='bpop .32s ease-out';
   clearTimeout(banner._t); banner._t=setTimeout(()=>{elBanner.style.opacity='0';}, ms||1600); }
 // 追跡者（ステージ末ごとに変わる巨大ボス）。前方視点チェイス中、背後にそびえて迫る
+// rot=モデルをプレイヤー方向へ向ける補正ヨー（既定π＝背面から正面へ。横向きモデルは±π/2）
 const PURSUERS={
-  shachi: {f:'shachi', h:8.5, msg:'Giant Golden Shachi! Dodge sideways!', icon:'🐟'},
-  g_truck:{f:'g_truck',h:6.0, msg:'Runaway truck! Dodge sideways!',       icon:'🚚'},
-  g_ebi:  {f:'g_ebi',  h:6.8, msg:'Giant Shrimp Fry incoming! Dodge!',    icon:'🍤'},
+  shachi: {f:'shachi', h:8.5, rot:Math.PI,    msg:'Giant Golden Shachi! Dodge sideways!', icon:'🐟'},
+  g_truck:{f:'g_truck2',h:4.8, rot:-Math.PI/2, lift:0.12, pitchK:0.3, msg:'Runaway truck! Dodge sideways!', icon:'🚚'},
+  g_ebi:  {f:'g_ebi',  h:6.8, rot:Math.PI,    msg:'Giant Shrimp Fry incoming! Dodge!',    icon:'🍤'},
 };
 // ステージ→追跡者の割り当て
 function stageChaseKind(){ return ({'NAGOYA TOWN':'shachi','NAGOYA EXPRESSWAY':'g_truck','HORIKAWA BRIDGE':'g_ebi','CONSTRUCTION SITE':'g_truck','SAKAE NIGHT':'shachi'})[curStage().n] || 'shachi'; }
 function makePursuer(kind){ const cfg=PURSUERS[kind]||PURSUERS.shachi; const g=new THREE.Group();
-  const m=placeModel(cfg.f, cfg.h, Math.PI);   // Meshyモデル・大きく・プレイヤー方向へ
+  const m=placeModel(cfg.f, cfg.h, cfg.rot!=null?cfg.rot:Math.PI);   // Meshyモデル・大きく・プレイヤー方向へ
   if(m){ m.traverse(o=>{if(o.isMesh)o.castShadow=false}); g.add(m); }
   else { const gold=new THREE.MeshStandardMaterial({color:'#e8c349',metalness:0.9,roughness:0.25,emissive:'#5a4410',emissiveIntensity:0.45});
     const body=new THREE.Mesh(new THREE.SphereGeometry(3.8,16,12),gold); body.scale.set(1,1.7,2.4); body.position.y=4; g.add(body); }
@@ -1063,7 +1064,8 @@ function frame(now){
   if(camShake>0)camShake-=dt*1.6;
   // 追跡者（金鯱）：チェイス中、背後(+z)からgapに応じて迫る
   if(pursuer && pursuer.visible){
-    // 金鯱本体を動かす：予告で仰け反り→噛みつきで前へ突進＆頭を下げる→戻る
+    // 本体を動かす：予告で仰け反り→噛みつき/突進で前へ→戻る。lift=接地系(トラック)は浮きを抑える
+    const pc=PURSUERS[pursuerKind]||PURSUERS.shachi, lift=pc.lift!=null?pc.lift:1, pk=pc.pitchK!=null?pc.pitchK:1;
     let fx=atkX*0.3, fz=10.5, fy=3.6, pitch=0;
     if(atkPhase==='tele'){ fx=atkX*0.5; fz=11.5; fy=4.6; pitch=-0.28; }
     else if(atkPhase==='strike'){ fx=atkX*0.8; fz=4.5; fy=1.0; pitch=0.5; }
@@ -1071,8 +1073,8 @@ function frame(now){
     const ez=atkPhase==='strike'?20:7;
     pursuer.position.x += (fx-pursuer.position.x)*(1-Math.exp(-9*dt));
     pursuer.position.z += (fz-pursuer.position.z)*(1-Math.exp(-ez*dt));
-    pursuer.position.y = fy+Math.sin(t*2.2)*0.3;
-    pursuer.rotation.x += (pitch-pursuer.rotation.x)*(1-Math.exp(-ez*dt));
+    pursuer.position.y = fy*lift+Math.sin(t*2.2)*0.3*lift;
+    pursuer.rotation.x += (pitch*pk-pursuer.rotation.x)*(1-Math.exp(-ez*dt));
     pursuer.rotation.y = Math.sin(t*1.2)*0.06;
   }
   // 警告マーカーの脈動
