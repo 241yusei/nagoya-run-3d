@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ナゴヤ人間RUN 3D</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e1018;
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;-webkit-user-select:none;user-select:none;}
+  #c{display:block;width:100vw;height:100vh;touch-action:none;}
+  .ui{position:fixed;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.45);pointer-events:none}
+  #score{top:14px;left:18px;font-size:13px;font-weight:700}
+  #score b{font-size:30px;display:block;line-height:1.05}
+  #coins{top:16px;right:20px;font-size:22px;font-weight:800;text-align:right}
+  #hint{bottom:14px;left:0;right:0;text-align:center;font-size:13px;color:#dfe6f2}
+  #over{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(14,16,26,.55);backdrop-filter:blur(3px)}
+  #over h1{color:#fff;font-size:40px;margin:0 0 6px}
+  #over p{color:#e7ecf5;font-size:18px;margin:2px}
+  #retry{margin-top:22px;background:#e8362e;color:#fff;border:0;border-radius:40px;
+    font-size:22px;font-weight:800;padding:16px 54px;cursor:pointer;box-shadow:0 8px 24px rgba(232,54,46,.4)}
+  #hp{top:52px;left:18px;font-size:17px;letter-spacing:1px}
+  #vig{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .2s;
+    background:radial-gradient(ellipse at center, rgba(200,20,20,0) 42%, rgba(190,15,15,.7) 100%)}
+  #banner{position:fixed;top:28%;left:0;right:0;text-align:center;color:#fff;font-size:32px;font-weight:900;
+    text-shadow:0 3px 14px rgba(0,0,0,.7);opacity:0;transition:opacity .25s;pointer-events:none}
+  #gapwrap{position:fixed;top:96px;left:50%;transform:translateX(-50%);width:220px;height:12px;
+    background:rgba(0,0,0,.35);border-radius:8px;opacity:0;transition:opacity .3s;overflow:hidden;pointer-events:none}
+  #gapbar{height:100%;width:100%;background:linear-gradient(90deg,#ffd84a,#e8a01a);border-radius:8px}
+  @keyframes bpop{0%{transform:scale(.7)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
+  /* ===== ゲーム風HUD ===== */
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;align-items:flex-start;gap:12px;
+    padding:10px 14px;pointer-events:none;font-weight:800;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.5)}
+  #avatar{position:relative;flex:0 0 auto;text-align:center}
+  #avatar img{width:54px;height:54px;border-radius:50%;object-fit:cover;object-position:50% 22%;
+    background:linear-gradient(160deg,#cfe0f5,#9fb6d2);border:3px solid #ffd84a;box-shadow:0 3px 10px rgba(0,0,0,.4)}
+  #hp{font-size:13px;letter-spacing:-1px;margin-top:1px}
+  #scorebox{flex:0 0 auto;font-size:12px;line-height:1}
+  #scorebox b{font-size:26px;display:block;line-height:1.0;margin-top:1px}
+  #scorebox #dist{font-size:12px;font-weight:700;opacity:.92}
+  #prog{flex:1 1 auto;display:flex;align-items:center;gap:6px;justify-content:center;margin-top:4px}
+  #prog .se{font-size:13px;opacity:.95}
+  #progbar{position:relative;flex:0 1 260px;height:9px;background:rgba(0,0,0,.4);border-radius:6px;overflow:visible}
+  #progfill{position:absolute;left:0;top:0;height:100%;width:0;background:linear-gradient(90deg,#4fd0ff,#1f7fe0);border-radius:6px}
+  #progrun{position:absolute;top:-16px;left:0;width:22px;height:22px;object-fit:cover;object-position:50% 0;
+    transform:translateX(-50%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+  #timer{font-size:15px;font-variant-numeric:tabular-nums;min-width:54px;text-align:right}
+  #cans{flex:0 0 auto;font-size:15px;display:flex;align-items:center;gap:3px}
+  #cans b{font-size:24px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="avatar"><img src="ui/hero_head.png" alt="ナゴヤ人間"><div id="hp">❤️❤️❤️</div></div>
+  <div id="scorebox">SCORE<b id="sc">0</b><span id="dist"></span></div>
+  <div id="prog"><span class="se">S</span><div id="progbar"><div id="progfill"></div><img id="progrun" src="ui/hero_full.png"></div><span class="se">G</span><div id="timer">0:00</div></div>
+  <div id="cans">🥤<b id="cn">0</b></div>
+</div>
+<div id="bgm" class="ui" style="top:64px;right:18px;font-size:24px;pointer-events:auto;cursor:pointer" title="BGM ON/OFF">🔊</div>
+<div id="hint" class="ui">← → 押し続け／画面左右ホールド＝移動 ・ ↑ 上スワイプ＝ジャンプ ・ ↓ 下スワイプ＝スライド ・ Shift／ダブルタップ＝ダッシュ</div>
+<div id="gapwrap" class="ui"><div id="gapbar"></div></div>
+<div id="vig"></div>
+<div id="banner"></div>
+<div id="over"><h1>ゲームオーバー</h1><p id="ovs"></p><button id="retry">リトライ</button></div>
+<script src="libs/three.min.js"></script>
+<script src="libs/GLTFLoader.js"></script>
+<script>
+'use strict';
+(()=>{ try{
+const W=()=>innerWidth, H=()=>innerHeight;
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(W(),H());
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=0.98;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#8fcdf0');   // 明るい青空（カートゥーン）
+scene.fog=new THREE.Fog('#d4ecf7', 160, 440);  // 薄く遠く
+
+const camera=new THREE.PerspectiveCamera(48, W()/H(), 0.1, 600);
+const CAM_BASE=new THREE.Vector3(0.0,3.0,8.0);   // ペプシマン：中央背後・低め・道路を真っ直ぐ見る
+camera.position.copy(CAM_BASE);
+
+// ===== ライト =====
+scene.add(new THREE.HemisphereLight('#dff1ff','#9a8f74',0.6));
+const sun=new THREE.DirectionalLight('#fff3df',1.55);
+sun.position.set(-13,21,9); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{near:1,far:80,left:-22,right:22,top:24,bottom:-16});
+sun.shadow.bias=-0.0004; sun.shadow.radius=5; scene.add(sun);
+const fill=new THREE.DirectionalLight('#ffe7c8',0.42); fill.position.set(10,8,-6); scene.add(fill);
+
+// ===== 道路（実写アスファルト＋車線ペイント）=====
+const ROADW=7, FARZ=-220, NEARZ=14;
+const roadTex=new THREE.TextureLoader().load('ui/road.jpg');
+roadTex.wrapS=roadTex.wrapT=THREE.RepeatWrapping; roadTex.repeat.set(2,260); roadTex.anisotropy=8; roadTex.encoding=THREE.sRGBEncoding;
+const ROAD_TILE=1000/260;   // 1リピートのワールド長
+const road=new THREE.Mesh(new THREE.PlaneGeometry(ROADW,1000),
+  new THREE.MeshStandardMaterial({map:roadTex,color:'#b3b0a8',roughness:0.9}));   // 明るめ・暖色寄り
+road.rotation.x=-Math.PI/2; road.position.z=-400; road.receiveShadow=true; scene.add(road);
+// 歩道（縁石）
+const curbMat=new THREE.MeshStandardMaterial({color:'#cfc9bd',roughness:1});
+[-1,1].forEach(s=>{const m=new THREE.Mesh(new THREE.BoxGeometry(7,0.5,1000),curbMat);
+  m.position.set(s*(ROADW/2+3.5),0.25,-400); m.receiveShadow=true; m.castShadow=true; scene.add(m);});
+// 白い車線ペイント
+const lineMat=new THREE.MeshStandardMaterial({color:'#eef0ec',roughness:0.55,emissive:'#39392f',emissiveIntensity:0.12});
+[-1,1].forEach(s=>{const e=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.04,1000),lineMat); // 路肩の実線
+  e.position.set(s*(ROADW/2-0.55),0.03,-400); scene.add(e);});
+const dashMat=lineMat;
+const dashes=[]; for(let i=0;i<60;i++){const d=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.04,2.4),dashMat); // 中央の破線
+  d.position.set(0,0.03,-i*5); d.receiveShadow=true; scene.add(d); dashes.push(d);}
+
+// ===== カートゥーンの街並み（明るい店舗ビル）=====
+const buildings=[];
+const cartCols=['#ecd9a8','#e6ab7c','#dd8f6c','#cf6258','#82b0a0','#6e9cc6','#e8bb5e','#dcb6cc','#8fbc70','#e7d09c','#e9947e','#7ba6cf'];
+const trimCols=['#bd9d6a','#a86c4c','#b06848','#9a4038','#5e8676','#4e74a0','#b88c3a','#a87a96','#5e8a44','#bd9a58','#b05a44','#4f78a8'];
+const winMat=new THREE.MeshStandardMaterial({color:'#bfe6f4',roughness:0.25,metalness:0.1,emissive:'#3a5e6a',emissiveIntensity:0.14});
+const doorMat=new THREE.MeshStandardMaterial({color:'#6b5440',roughness:0.7});
+// 日よけのストライプ
+function awnTexOf(c){ const cv=document.createElement('canvas');cv.width=64;cv.height=8;const x=cv.getContext('2d');
+  for(let i=0;i<8;i++){x.fillStyle=i%2?'#f3eee0':c; x.fillRect(i*8,0,8,8);} const t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; return t; }
+const awnTex=['#d6493f','#3f8fd6','#3fa86a','#e0973a'].map(awnTexOf);
+function building(x,z,side){
+  // 沿道（手前）はMeshyのカートゥーン店舗・家を優先
+  if(Math.abs(x)<9 && (MODELS.shop||MODELS.house) && Math.random()<0.72){
+    const which=(MODELS.shop&&MODELS.house)?(Math.random()<0.5?'shop':'house'):(MODELS.shop?'shop':'house');
+    const m=placeModel(which, 4.8+Math.random()*1.8, x<0?-Math.PI/2:Math.PI/2);
+    if(m){ const g=new THREE.Group(); g.position.set(x,0,z); g.add(m); g.userData={side,wins:[]}; scene.add(g); return g; }
+  }
+  const w=4.5+Math.random()*4.5, h=4.5+Math.random()*4.5, d=4.5+Math.random()*4;
+  const ci=(Math.random()*cartCols.length)|0;
+  const body=new THREE.MeshStandardMaterial({color:cartCols[ci],roughness:0.88});
+  const trim=new THREE.MeshStandardMaterial({color:trimCols[ci],roughness:0.85});
+  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),body);
+  b.position.set(x,h/2,z); b.castShadow=true; b.receiveShadow=true; scene.add(b);
+  b.userData={w,h,d,side,wins:[]};
+  const roadDir=(x<0?1:-1), fx=x+roadDir*(w/2+0.02);   // 道路を向く面
+  const add=(m)=>{ scene.add(m); b.userData.wins.push(m); };
+  // 屋根の軒（コーニス）
+  const corn=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.55,d+0.5),trim); corn.position.set(x,h-0.1,z); corn.castShadow=true; add(corn);
+  // 窓（明るい）＋枠：道路向き面に格子状
+  const rows=Math.max(1,Math.floor((h-3.2)/2.4)), cols=Math.max(1,Math.round(w/2.0));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const wy=3.0+r*2.4, wz=z+(c-(cols-1)/2)*1.7;
+    const fr=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.25,1.05),trim); fr.position.set(fx,wy,wz); add(fr);
+    const wn=new THREE.Mesh(new THREE.BoxGeometry(0.04,1.0,0.85),winMat); wn.position.set(fx+roadDir*0.02,wy,wz); add(wn);
+  }
+  // 1階の店舗：ストライプの日よけ＋ドア
+  if(Math.random()<0.8){ const tex=awnTex[(Math.random()*awnTex.length)|0].clone(); tex.repeat.set(Math.max(2,Math.round(w/0.7)),1);
+    const aw=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,w*0.9), new THREE.MeshStandardMaterial({map:tex,roughness:0.8}));
+    aw.position.set(fx+roadDir*0.75,2.5,z); aw.rotation.z=roadDir*0.42; aw.castShadow=true; add(aw);
+    // 日よけの前垂れ
+    const fr2=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.4,w*0.9),new THREE.MeshStandardMaterial({map:tex.clone(),roughness:0.8}));
+    fr2.position.set(fx+roadDir*1.45,2.05,z); add(fr2);
+  }
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.7,1.0),doorMat); door.position.set(fx,0.85,z); add(door);
+  return b;
+}
+const BLEN=200, BGAP=9;
+// 街の生成はモデルのロード後（buildCity）。下で定義してトリガー
+// ===== 街路樹・街灯（歩道の小物）=====
+const props=[];
+function makeTree(){ const g=new THREE.Group();
+  const m=placeModel('tree', 3.6+Math.random()*1.2, Math.random()*6.28);  // Meshyのカートゥーン木
+  if(m){ g.add(m); return g; }
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.32,1.5,8),new THREE.MeshStandardMaterial({color:'#8a5a3a',roughness:0.9})); trunk.position.y=0.75; g.add(trunk);
+  const cmat=new THREE.MeshStandardMaterial({color:'#5fa84e',roughness:0.85});
+  [[0,2.2,0,1.35],[-0.7,1.85,0.3,0.95],[0.7,1.95,-0.25,1.0],[0,2.95,0,1.0],[0.2,2.3,0.7,0.8]].forEach(([x,y,z,r])=>{
+    const c=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),cmat); c.position.set(x,y,z); c.castShadow=true; g.add(c);});
+  return g; }
+function makeLamp(){ const g=new THREE.Group();
+  const pm=new THREE.MeshStandardMaterial({color:'#39454e',roughness:0.55,metalness:0.4});
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,3.8,8),pm); pole.position.y=1.9; g.add(pole);
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.1),pm); arm.position.set(0.42,3.75,0); g.add(arm);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),new THREE.MeshStandardMaterial({color:'#fff2c8',emissive:'#ffd86a',emissiveIntensity:0.55})); head.position.set(0.85,3.6,0); g.add(head);
+  return g; }
+const PROPLEN=180;
+// カートゥーン名古屋名所（建物スロットに置き換えて配置＝街並みに溶け込む）
+const LM_CART=[ {f:'c_castle',h:15}, {f:'c_tower',h:22}, {f:'c_oasis',h:12}, {f:'c_arena',h:13}, {f:'c_science',h:16}, {f:'c_taiyo',h:19}, {f:'c_osu',h:13} ];
+const LM_INNER=ROADW/2+5.5;   // 名所の道路側の端をこの位置(歩道)に固定＝道路へはみ出さない
+// 名所を生成：道路側の端をLM_INNERに揃え、外側へ伸ばす
+function makeLandmark(cfg, side){
+  const MD=MODELS[cfg.f]; if(!MD) return null;
+  const m=MD.scene.clone(true); m.scale.setScalar(cfg.h/MD.h0);
+  m.rotation.y = side<0?-Math.PI/2:Math.PI/2; m.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(m);
+  if(side<0) m.position.x = -LM_INNER - b.max.x; else m.position.x = LM_INNER - b.min.x; // 内側端を固定
+  m.position.y = -b.min.y; m.position.z = -(b.min.z+b.max.z)/2;
+  m.traverse(o=>{if(o.isMesh)o.castShadow=false;});
+  const g=new THREE.Group(); g.add(m); g.userData={wins:[]}; return g;
+}
+// モデルがロードされてから街（ビル＋名所＋小物）を生成。フォールバックでタイムアウト後も生成
+let cityBuilt=false;
+function buildCity(){ if(cityBuilt)return; cityBuilt=true;
+  const slots=Math.floor(BLEN/BGAP);
+  // 名所を置くスロット（建物の代わり・左右交互に散らす）
+  const lmAt={};
+  if(LM_CART.every(c=>MODELS[c.f])){
+    for(let k=0;k<LM_CART.length;k++){ const slot=2+Math.floor(k*(slots-3)/LM_CART.length); const side=(k%2===0)?-1:1; lmAt[slot+'|'+side]=k; }
+  }
+  for(let i=0;i<slots;i++){const z=-i*BGAP;
+    [-1,1].forEach(side=>{
+      const li=lmAt[i+'|'+side];
+      if(li!==undefined){ // 名所スロット：この側のビルは置かず名所を立てる
+        const g=makeLandmark(LM_CART[li], side);
+        if(g){ g.position.set(0,0,z); scene.add(g); buildings.push(g); return; }
+      }
+      buildings.push(building(side*(ROADW/2+5.5+Math.random()*2), z, side));    // 手前のビル
+      buildings.push(building(side*(ROADW/2+13+Math.random()*5), z-4, side));    // 奥のビル
+    });
+  }
+  for(let i=0;i<PROPLEN/9;i++){ const z=-i*9;
+    [-1,1].forEach(s=>{ const g=(Math.random()<0.5)?makeTree():makeLamp();
+      if(s>0)g.scale.x=-1; g.position.set(s*(ROADW/2+1.7),0,z+(s<0?0:4.5));
+      g.traverse(o=>{if(o.isMesh)o.castShadow=true}); scene.add(g); props.push(g); }); }
+}
+function tryBuildCity(){ if(MODELS.shop&&MODELS.house&&MODELS.tree && LM_CART.every(c=>MODELS[c.f])) buildCity(); }
+setTimeout(buildCity, 6000);   // モデルが来なくても6秒後には生成（フォールバック）
+
+// ===== 名古屋のランドマーク（3D・遠景に配置してスクロール）=====
+const LM=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.8},o));
+
+// 名古屋城（石垣＋白壁5層＋緑青の屋根＋金鯱）
+function lmCastle(){
+  const g=new THREE.Group();
+  const stone=LM('#8d8a82',{roughness:1}), wall=LM('#efe7d6',{roughness:0.85}), roof=LM('#5e8d7e',{roughness:0.7});
+  const gold=new THREE.MeshStandardMaterial({color:'#e8c349',metalness:0.9,roughness:0.25,emissive:'#5a4410',emissiveIntensity:0.35});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(7,9.2,9,4),stone); base.rotation.y=Math.PI/4; base.position.y=4.5; g.add(base);
+  const tiers=[[6.6,5],[5.6,4.2],[4.6,3.6],[3.7,3.0],[2.9,2.6]];
+  let y=9, topY=9;
+  for(let i=0;i<tiers.length;i++){const[w,h]=tiers[i];
+    const fl=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),wall); fl.position.y=y+h/2; g.add(fl);
+    const rf=new THREE.Mesh(new THREE.ConeGeometry(w*0.95,1.5,4),roof); rf.rotation.y=Math.PI/4; rf.position.y=y+h+0.45; g.add(rf);
+    y+=h+0.7; topY=y;}
+  [-0.95,0.95].forEach(sx=>{const sh=new THREE.Mesh(new THREE.ConeGeometry(0.36,1.5,8),gold);
+    sh.position.set(sx,topY+0.4,0); sh.rotation.z=sx>0?0.45:-0.45; g.add(sh);});
+  return g;
+}
+// 名古屋テレビ塔（中部電力MIRAI TOWER）末広がりの赤い鉄塔
+function lmTower(){
+  const g=new THREE.Group();
+  const red=LM('#ff4d2a',{roughness:0.45,metalness:0,emissive:'#d12608',emissiveIntensity:0.7});
+  const dark=LM('#f23a18',{roughness:0.5,metalness:0,emissive:'#b01e05',emissiveIntensity:0.6});
+  const legH=40;
+  // 末広がりの4角錐の塔体（下4.0→上1.0）
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(1.0,4.0,legH,4),red);
+  shaft.rotation.y=Math.PI/4; shaft.position.y=legH/2; g.add(shaft);
+  // 水平の鉄骨ベルト
+  for(let h=5;h<legH;h+=5){const t=h/legH, r=(4.0*(1-t)+1.0*t)+0.08;
+    const belt=new THREE.Mesh(new THREE.TorusGeometry(r,0.16,5,4),dark); belt.rotation.x=Math.PI/2; belt.rotation.z=Math.PI/4; belt.position.y=h; g.add(belt);}
+  // 脚の隙間（下部を抜いて鉄塔らしく）：4本のアーチ柱を外側に
+  for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.5,12,6),dark);
+    leg.position.set(Math.cos(a)*3.4,6,Math.sin(a)*3.4); leg.rotation.z=-Math.cos(a)*0.18; leg.rotation.x=Math.sin(a)*0.18; g.add(leg);}
+  // 展望台（赤い箱＋ガラス帯）
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(3.6,3.0,3.6),red); deck.position.y=legH-3.5; g.add(deck);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(3.7,1.2,3.7),LM('#cfe6ef',{roughness:0.35,metalness:0.3,emissive:'#26505c',emissiveIntensity:0.25})); glass.position.y=legH-3.5; g.add(glass);
+  // 上部マスト＋アンテナ
+  const up=new THREE.Mesh(new THREE.CylinderGeometry(0.25,1.2,12,4),red); up.rotation.y=Math.PI/4; up.position.y=legH+5; g.add(up);
+  const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.18,14,6),dark); ant.position.y=legH+17; g.add(ant);
+  return g;
+}
+// オアシス21「水の宇宙船」楕円ガラス屋根
+function lmOasis(){
+  const g=new THREE.Group();
+  const glass=new THREE.MeshStandardMaterial({color:'#7fc4d6',transparent:true,opacity:0.6,roughness:0.2,metalness:0.3,emissive:'#2a6b78',emissiveIntensity:0.3});
+  const col=LM('#b9c2c9',{metalness:0.4,roughness:0.5}), H=26;
+  // 台座（栄の地上階＋デッキ）
+  const podium=new THREE.Mesh(new THREE.BoxGeometry(20,12,14),LM('#aab2bb',{roughness:0.8})); podium.position.y=6; g.add(podium);
+  for(let i=0;i<6;i++){const a=i*Math.PI/3;
+    const c=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,H-12,8),col); c.position.set(Math.cos(a)*6,12+(H-12)/2,Math.sin(a)*4); g.add(c);}
+  const oval=new THREE.Mesh(new THREE.CylinderGeometry(8,8,1.1,40),glass); oval.scale.set(1.5,1,1); oval.position.y=H+0.5; g.add(oval);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(8,0.25,8,40),col); rim.rotation.x=Math.PI/2; rim.scale.set(1.5,1,1); rim.position.y=H+0.5; g.add(rim);
+  return g;
+}
+// JRセントラルタワーズ（名駅の双子ガラス塔）
+function lmCentral(){
+  const g=new THREE.Group();
+  const glass=new THREE.MeshStandardMaterial({color:'#9fb6c9',metalness:0.5,roughness:0.3,emissive:'#1a2733',emissiveIntensity:0.18});
+  [[-4.2,60,7],[4.6,53,6]].forEach(([x,h,r])=>{
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(r*0.5,r*0.55,h,20),glass); t.position.set(x,h/2,0); g.add(t);
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(r*0.18,r*0.5,4,12),glass); cap.position.set(x,h+2,0); g.add(cap);});
+  const base=new THREE.Mesh(new THREE.BoxGeometry(17,11,10),LM('#8895a3',{roughness:0.7})); base.position.y=5.5; g.add(base);
+  return g;
+}
+// サンシャインサカエの観覧車 Sky-Boat（回転）
+function lmFerris(){
+  const g=new THREE.Group();
+  const frame=LM('#ee3a52',{metalness:0.25,roughness:0.45,emissive:'#6a1020',emissiveIntensity:0.35}), R=9;
+  const wheel=new THREE.Group(); wheel.position.set(0,R+9,0);
+  [-0.6,0.6].forEach(zz=>{const rim=new THREE.Mesh(new THREE.TorusGeometry(R,0.25,8,32),frame); rim.position.z=zz; wheel.add(rim);});
+  const cols=['#e94f5a','#f2b134','#4fb0e9','#5ad17a','#b07fe0'];
+  for(let i=0;i<12;i++){const a=i*Math.PI/6;
+    const spk=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,R*2,4),frame); spk.rotation.z=a; wheel.add(spk);
+    const gon=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,1.5),LM(cols[i%cols.length],{roughness:0.5}));
+    gon.position.set(Math.cos(a)*R,Math.sin(a)*R,0); wheel.add(gon);}
+  g.add(wheel); g.userData.wheel=wheel; g.userData.spin=0.18;
+  const base=new THREE.Mesh(new THREE.BoxGeometry(10,17,8),LM('#c8ccd2',{roughness:0.8})); base.position.y=8.5; g.add(base);
+  [-1,1].forEach(s=>{const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,R+11,8),frame);
+    leg.position.set(s*3,R+3,1.6); leg.rotation.x=0.1; g.add(leg);});
+  return g;
+}
+// IGアリーナ（2025年開業・名城公園の大型アリーナ）楕円ドームの本体
+function lmArena(){
+  const g=new THREE.Group();
+  const wall=LM('#dbe0e5',{roughness:0.55,metalness:0.2});
+  const glass=new THREE.MeshStandardMaterial({color:'#8fb4c8',metalness:0.5,roughness:0.3,emissive:'#22424f',emissiveIntensity:0.22});
+  const roofMat=LM('#b6c0c9',{roughness:0.45,metalness:0.35});
+  const SX=1.5, SZ=1.1; // 楕円スケール
+  // 本体ドラム
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(8,8.6,11,36),wall); body.scale.set(SX,1,SZ); body.position.y=5.5; g.add(body);
+  // ガラス帯
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(8.15,8.15,3.2,36),glass); band.scale.set(SX,1,SZ); band.position.y=3.6; g.add(band);
+  // つぶした半球ドーム屋根
+  const roof=new THREE.Mesh(new THREE.SphereGeometry(8.3,36,16,0,Math.PI*2,0,Math.PI/2),roofMat); roof.scale.set(SX,0.55,SZ); roof.position.y=11; g.add(roof);
+  // 屋根のリング縁
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(8.3,0.3,8,36),roofMat); rim.rotation.x=Math.PI/2; rim.scale.set(SX,SZ,1); rim.position.y=11; g.add(rim);
+  // エントランスの庇
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(9,0.6,4.5),roofMat); canopy.position.set(0,4.8,8.5); g.add(canopy);
+  [-1,1].forEach(s=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,4.8,8),wall); p.position.set(s*3.6,2.4,10.2); g.add(p);});
+  return g;
+}
+// ===== 実写ランドマーク（写真→MeshyでAI 3D化したGLBを配置）=====
+const landmarks=[];
+// file=GLB名 / h=配置時の高さ(m) / 名古屋の名所
+const LM_GLB=[
+  {file:'castle',  h:24},  // 名古屋城
+  {file:'station', h:46},  // 名古屋駅（JRセントラルタワーズ）
+  {file:'tower',   h:44},  // 名古屋テレビ塔
+  {file:'oasis',   h:16},  // オアシス21
+  {file:'arena',   h:19},  // IGアリーナ
+  {file:'science', h:25},  // 名古屋市科学館
+  {file:'taiyo',   h:23},  // 若い太陽の塔
+  {file:'osu',     h:19},  // 大須観音
+  {file:'tsuruma', h:14},  // 鶴舞公園
+  {file:'meitetsu',h:30},  // 名鉄百貨店（実写ビル）
+];
+// 写真由来モデルは背景まで立体化され横幅が広いので、「道路側の端」を原点に揃えて道路へのはみ出しを防ぐ
+const LM_INNER_GAP=1.5; // 道路側の端を原点からさらに外側へ逃がすマージン
+function loadLandmark(cfg, group, side){
+  new THREE.GLTFLoader().load('landmarks/opt/'+cfg.file+'.glb',(gl)=>{
+    const m=gl.scene;
+    let b=new THREE.Box3().setFromObject(m); const sz=new THREE.Vector3(); b.getSize(sz);
+    const s=(sz.y>0.001)? cfg.h/sz.y : 1; m.scale.setScalar(s);
+    b=new THREE.Box3().setFromObject(m); const c=new THREE.Vector3();
+    m.position.z-= (b.min.z+b.max.z)/2;   // 奥行きは中央寄せ
+    m.position.y-=b.min.y;                  // 底面を接地
+    // 道路側（内側）の端を原点に。左側(side<0)はモデルの右端(max.x)、右側はmodelの左端(min.x)を基準
+    if(side<0) m.position.x-=(b.max.x+LM_INNER_GAP);
+    else       m.position.x-=(b.min.x-LM_INNER_GAP);
+    m.traverse(o=>{ if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; o.frustumCulled=false;
+      if(o.material){ o.material.side=THREE.DoubleSide; if(o.material.map)o.material.map.encoding=THREE.sRGBEncoding; } }});
+    group.add(m);
+  }, undefined, (e)=>console.warn('landmark load fail',cfg.file,e));
+}
+// 写真スキャンのランドマークはカートゥーン世界観に合わないため無効化（landmarks空のまま）
+// （必要ならカートゥーン版の名古屋名所を後日追加）
+
+// ===== キャラ（Meshyの実3Dモデル・色付き＋全アニメ）=====
+// chars.main=名古屋人間（通常）、chars.gold=金スター（パワーアップ時）
+const chars={main:null, gold:null}; let activeChar=null, modelReady=false, powerT=0;
+const FACE=Math.PI, CHAR_H=2.4;
+const ANIM_FOR={run:'Running', jump:'Regular_Jump', slide:'slide_light', idle:'Walking'};
+// 接地影
+const shTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
+  const g=x.createRadialGradient(64,64,3,64,64,62);g.addColorStop(0,'rgba(0,0,0,.55)');g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(cv);})();
+const blob=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.5),
+  new THREE.MeshBasicMaterial({map:shTex,transparent:true,depthWrite:false}));
+blob.rotation.x=-Math.PI/2; blob.position.y=0.03; scene.add(blob);
+
+function loadChar(url,key,onReady){
+  new THREE.GLTFLoader().load(url,(gltf)=>{
+    const m=gltf.scene; m.rotation.y=FACE;
+    // スケールは骨格の足→頭の高さ基準（スキンメッシュのbboxは特殊空間の値を返し誤るため）
+    const wpY=o=>{ o.updateWorldMatrix(true,false); return o.matrixWorld.elements[13]; };
+    const footB=m.getObjectByName('LeftFoot')||m.getObjectByName('RightFoot');
+    const headB=m.getObjectByName('headfront')||m.getObjectByName('Head')||m.getObjectByName('head_end');
+    m.scale.setScalar(1); m.updateMatrixWorld(true);
+    let s=CHAR_H/2; if(footB&&headB){ const h=wpY(headB)-wpY(footB); if(h>0.05) s=CHAR_H/h; }
+    m.scale.setScalar(s); m.updateMatrixWorld(true);
+    if(footB) m.position.y=-wpY(footB)+0.05;
+    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false;
+      if(o.material){ if(o.material.map)o.material.map.encoding=THREE.sRGBEncoding;
+        o.material.roughness=0.6; o.material.metalness=0.0; o.material.needsUpdate=true; } }});
+    const holder=new THREE.Group(); holder.add(m); holder.visible=false; scene.add(holder);
+    const hips=m.getObjectByName('Hips')||m.getObjectByName('hips');
+    const hipsBind=hips?hips.position.clone():null;
+    const mixer=new THREE.AnimationMixer(m); const ACT={};
+    ['Running','Regular_Jump','slide_light','Walking','Run_03','Run_and_Jump'].forEach(n=>{
+      const cl=THREE.AnimationClip.findByName(gltf.animations,n);
+      if(cl){ ACT[n]=mixer.clipAction(cl); ACT[n].setLoop(THREE.LoopRepeat); } });
+    if(ACT['Running'])ACT['Running'].play();
+    chars[key]={holder,inner:m,mixer,ACT,hips,hipsBind,curAnim:'Running'};
+    console.log(key,'loaded:',gltf.animations.map(a=>a.name).join(','));
+    addKnock(chars[key]);
+    onReady&&onReady(chars[key]);
+  },undefined,(e)=>console.warn('glb load error',url,e));
+}
+// ノックダウン（ゲームオーバー）アニメ。同骨格なので両キャラへ移植
+let knockClip=null;
+function addKnock(ch){ if(knockClip&&ch&&!ch.ACT['KnockDown']){ const a=ch.mixer.clipAction(knockClip); a.setLoop(THREE.LoopOnce); a.clampWhenFinished=true; ch.ACT['KnockDown']=a; } }
+new THREE.GLTFLoader().load('character/knockdown_anim.glb',(g)=>{
+  knockClip=THREE.AnimationClip.findByName(g.animations,'Armature|Knock_Down_1|baselayer')||g.animations[0];
+  for(const k in chars) addKnock(chars[k]);
+  console.log('knockdown loaded');
+},undefined,(e)=>console.warn('knockdown load error',e));
+loadChar('character/nagoya_opt.glb','main',(ch)=>{ activeChar=ch; ch.holder.visible=true; modelReady=true; });
+loadChar('character/star_anim_opt.glb','gold');
+function setAnim(ch,name){
+  if(!ch||name===ch.curAnim||!ch.ACT[name])return;
+  const nx=ch.ACT[name]; nx.reset().setEffectiveWeight(1).play();
+  if(ch.ACT[ch.curAnim])ch.ACT[ch.curAnim].crossFadeTo(nx,0.12,false);
+  ch.curAnim=name;
+}
+
+// ===== コイン =====
+const coinMat=new THREE.MeshStandardMaterial({color:'#2156c4',roughness:0.3,metalness:0.55,emissive:'#0a1f55',emissiveIntensity:0.2});
+const coinGeo=new THREE.CylinderGeometry(0.3,0.3,0.62,18);
+const coins=[];
+function spawnCoins(z){const lx=-2.2+Math.random()*4.4; const n=3+((Math.random()*4)|0); const h=Math.random()<0.3?2.2:0.9;
+  for(let i=0;i<n;i++){const c=new THREE.Mesh(coinGeo,coinMat);
+    c.position.set(lx,h,z-i*1.6); c.castShadow=true; scene.add(c);
+    c.userData={alive:true}; coins.push(c);} }
+
+// ===== エメラルドの星（取ると金スターに20秒変身）=====
+const starShape=(()=>{ const sh=new THREE.Shape(); const sp=5,oR=0.5,iR=0.22;
+  for(let i=0;i<sp*2;i++){ const r=i%2?iR:oR, a=Math.PI/2+i*Math.PI/sp, x=Math.cos(a)*r, y=Math.sin(a)*r;
+    i?sh.lineTo(x,y):sh.moveTo(x,y); } sh.closePath(); return sh; })();
+const starGeo=new THREE.ExtrudeGeometry(starShape,{depth:0.15,bevelEnabled:true,bevelSize:0.05,bevelThickness:0.04,bevelSegments:1});
+starGeo.center();
+const starMat=new THREE.MeshStandardMaterial({color:'#0fcf7d',emissive:'#0a8f52',emissiveIntensity:0.7,roughness:0.22,metalness:0.35});
+const glowTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
+  const g=x.createRadialGradient(64,64,2,64,64,62);g.addColorStop(0,'rgba(40,230,150,.55)');g.addColorStop(1,'rgba(40,230,150,0)');
+  x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(cv);})();
+const emeralds=[];
+function spawnEmerald(z){
+  const grp=new THREE.Group(); grp.position.set(-2.0+Math.random()*4.0,1.45,z);
+  const e=new THREE.Mesh(starGeo,starMat); e.castShadow=true; grp.add(e);
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(2.4,2.4),new THREE.MeshBasicMaterial({map:glowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  grp.add(glow);
+  grp.userData={alive:true,star:e,glow}; scene.add(grp); emeralds.push(grp);
+}
+
+// ===== 障害物・敵（種類豊富＋動きあり＋難易度段階）=====
+const obstacles=[];
+const SPZ=-58;  // 通常スポーン距離（奥から手前へ）
+const CHASE_SPZ=42;  // チェイス中は背後(奥+z)から出て手前(-z)カメラへ向かう
+const M=(c,r,e)=>new THREE.MeshStandardMaterial({color:c,roughness:r==null?0.6:r,emissive:e||'#000',emissiveIntensity:e?0.25:0});
+function mesh(g,m,y){const x=new THREE.Mesh(g,m);x.position.y=y||0;x.castShadow=true;x.receiveShadow=true;return x;}
+// Meshyで生成した3Dモデル（金鯱・車・敵）を事前ロード→クローンで使い回す
+const MODELS={};
+['shachi','car','enemy','tree','shop','house','c_castle','c_tower','c_oasis','c_arena','c_science','c_taiyo','c_osu'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
+  const m=g.scene; m.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.frustumCulled=false; if(o.material&&o.material.map)o.material.map.encoding=THREE.sRGBEncoding;} });
+  const b=new THREE.Box3().setFromObject(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
+  MODELS[name]={scene:m, h0:sz.y||1, cx:c.x, cz:c.z, minY:b.min.y};
+  if(typeof tryBuildCity==='function') tryBuildCity();
+}, undefined, e=>console.warn('model load fail',name,e)); });
+function placeModel(name, targetH, faceY){
+  const MD=MODELS[name]; if(!MD) return null;
+  const m=MD.scene.clone(true), s=targetH/MD.h0; m.scale.setScalar(s);
+  m.position.set(-MD.cx*s, -MD.minY*s, -MD.cz*s); if(faceY!=null)m.rotation.y=faceY;
+  return m;
+}
+// 各種ビルダー：g.userData={act:'jump'|'slide', thr, upd(o,t)} を設定
+// 単一レーン幅は約1.4。全幅(span)はレーン3つ＝道路幅をカバー。
+// userData: act='jump'|'slide'|'dodge', thr/barY, breakable, span, upd
+const BUILD={
+  box(g){ const h=1.0+Math.random()*0.3; g.add(mesh(new THREE.BoxGeometry(1.4,h,0.9),M('#d8552e'),h/2));
+    g.userData.act='jump'; g.userData.thr=h; g.userData.breakable=true; },
+  wall(g){ const h=1.7; const b=mesh(new THREE.BoxGeometry(1.4,h,0.7),M('#7a4a8a'),h/2); g.add(b);
+    g.add(mesh(new THREE.BoxGeometry(1.55,0.18,0.85),M('#5a3568'),h)); g.userData.act='jump'; g.userData.thr=h; g.userData.breakable=true; },
+  spikes(g){ const mat=M('#c0392b'); for(let i=-1;i<=1;i++){const c=mesh(new THREE.ConeGeometry(0.24,1.0,5),mat,0.5); c.position.x=i*0.4; g.add(c);}
+    g.add(mesh(new THREE.BoxGeometry(1.4,0.12,0.9),M('#7a241b'),0.06)); g.userData.act='jump'; g.userData.thr=0.95; },
+  roller(g){ const c=mesh(new THREE.CylinderGeometry(0.62,0.62,1.5,16),M('#3a6ea5'),0.62); c.rotation.z=Math.PI/2; g.add(c);
+    const stripe=mesh(new THREE.CylinderGeometry(0.64,0.64,0.3,16),M('#fff'),0.62); stripe.rotation.z=Math.PI/2; g.add(stripe);
+    g.userData.act='jump'; g.userData.thr=1.25; g.userData.breakable=true; g.userData.roll=c;
+    g.userData.upd=(o,t,dt,sp)=>{ o.userData.roll.rotation.x-=sp*dt*1.4; }; },
+  // 全幅：スライドで通る赤いバー（道路全体）
+  bar(g){ const post=M('#8a6a4a',0.85); [-3.3,3.3].forEach(s=>{const p=mesh(new THREE.BoxGeometry(0.2,2.2,0.2),post,1.1); p.position.x=s; g.add(p);});
+    g.add(mesh(new THREE.BoxGeometry(7.0,0.34,0.34),M('#c23a30'),1.92)); g.userData.act='slide'; g.userData.barY=1.78; g.userData.span=true; },
+  // 全幅：ジャンプで越える低い壁
+  lowwall(g){ const h=0.95; g.add(mesh(new THREE.BoxGeometry(7.0,h,0.7),M('#caa23a'),h/2));
+    g.add(mesh(new THREE.BoxGeometry(7.0,0.16,0.85),M('#8a6d22'),h)); g.userData.act='jump'; g.userData.thr=h; g.userData.span=true; },
+  drone(g){ const body=mesh(new THREE.BoxGeometry(1.4,0.5,1.0),M('#444a55',0.4,'#223'),0); g.add(body);
+    g.add(mesh(new THREE.SphereGeometry(0.16,10,8),M('#34e0ff',0.3,'#0af'),0));
+    const base=1.75; g.userData.act='slide'; g.userData.barY=1.7;
+    g.userData.upd=(o,t)=>{ o.children[0].position.y=base+Math.sin(t*4)*0.18; o.children[1].position.y=o.children[0].position.y; }; },
+  enemy(g){ const m=placeModel('enemy',1.5,Math.PI);
+    if(m){ g.add(m); } else { const body=mesh(new THREE.SphereGeometry(0.5,16,14),M('#e0518a'),0.5); body.scale.y=1.1; g.add(body); }
+    g.userData.act='jump'; g.userData.thr=1.45;
+    g.userData.upd=(o,t)=>{ if(o.children[0])o.children[0].position.y=Math.abs(Math.sin(t*5))*0.22; o.position.x=o.userData.baseX+Math.sin(t*1.8)*0.32; }; },
+  // 三角コーン：レーン移動で避ける（低い・ぶつかると減速）
+  cone(g){ g.add(mesh(new THREE.ConeGeometry(0.42,1.0,16),M('#ff7a1a',0.7),0.5));
+    g.add(mesh(new THREE.CylinderGeometry(0.5,0.5,0.08,16),M('#222',0.6),0.04));
+    g.add(mesh(new THREE.TorusGeometry(0.3,0.05,8,16).rotateX(Math.PI/2),M('#fff',0.5),0.55)); g.userData.act='dodge'; },
+  // 車：背が高くジャンプ不可＝横に避ける（Meshyモデル）
+  car(g){ const m=placeModel('car',1.5,Math.PI);
+    if(m){ g.add(m); } else { const c=['#2d6cb5','#c43a3a','#e0c040','#3a9d6a'][(Math.random()*4)|0];
+      g.add(mesh(new THREE.BoxGeometry(1.7,0.9,2.6),M(c,0.5),0.55)); g.add(mesh(new THREE.BoxGeometry(1.5,0.7,1.4),M(c,0.4),1.25)); }
+    g.userData.act='dodge'; },
+  // 穴（マンホール）：ジャンプで越える。落ちると即死
+  hole(g){ g.add(mesh(new THREE.CircleGeometry(0.95,22).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({color:'#0a0a12'}),0.02));
+    g.add(mesh(new THREE.TorusGeometry(0.95,0.08,8,22).rotateX(Math.PI/2),M('#e8c349',0.5,'#5a4410'),0.03));
+    g.userData.act='jump'; g.userData.thr=0.6; g.userData.instakill=true; },
+};
+// 当たり判定のx半幅（障害物ごと）
+const HALF={box:0.7,wall:0.7,spikes:0.7,roller:0.75,drone:0.75,enemy:0.55,cone:0.45,car:0.95,hole:0.95};
+function tierPool(m){
+  if(m<240) return ['cone','box','car','cone','box'];
+  if(m<540) return ['cone','box','car','hole','wall','roller','car'];
+  if(m<900) return ['cone','box','car','hole','wall','roller','spikes','drone','enemy'];
+  return ['cone','box','car','hole','wall','roller','spikes','drone','enemy','car'];
+}
+function obGap(m){ if(m<240)return 30+Math.random()*10; if(m<540)return 22+Math.random()*8; if(m<900)return 16+Math.random()*6; return 12+Math.random()*5; }
+function randX(){ return -2.2+Math.random()*4.4; }   // 道路内の連続x
+function spawnObAtX(kind,x){
+  const g=new THREE.Group(); g.position.set(x,0,SPZ);
+  g.userData={kind,baseX:x,passed:false,t0:t}; BUILD[kind](g); g.userData.half=HALF[kind]||0.7;
+  scene.add(g); obstacles.push(g);
+}
+function pickBlocker(pool){ const d=pool.filter(k=>k==='car'||k==='cone'); return (d.length&&Math.random()<0.7)? d[(Math.random()*d.length)|0] : pool[(Math.random()*pool.length)|0]; }
+function spawnPattern(){
+  const m=scroll, pool=tierPool(m), r=Math.random();
+  if(r<0.28){ spawnObAtX(Math.random()<0.5?'bar':'lowwall', 0); }                 // 全幅：スライド/ジャンプ
+  else if(r<0.58){ const gapX=randX(), side=Math.random()<0.5?-1:1;               // 隙間を縫う：左右に避け障害物
+    spawnObAtX(pickBlocker(pool), Math.max(-2.4,gapX-side*1.9)); spawnObAtX(pickBlocker(pool), Math.min(2.4,gapX+side*1.9)); }
+  else if(r<0.74 && m>300){ spawnObAtX('hole', -2.0+Math.random()*4.0); }          // 穴：ジャンプ（即死・端は避ける）
+  else { spawnObAtX(pool[(Math.random()*pool.length)|0], randX()); }              // 単発
+}
+function spawnObstacle(){ spawnPattern(); }
+
+// ===== ゲーム状態 =====
+let state='run', t=0, scroll=0, speed=11, baseSpeed=11;
+let py=0, vy=0, grounded=true, sliding=false, slideT=0;
+let score=0, coinCount=0, nextOb=0, nextCoin=-6, deadT=0, starsPlan=[];
+const GRAV=50, JUMP=16, DEAD_LIFT=0.55; // 転倒アニメで地面にめり込む分を持ち上げる
+let FOOT_LIFT=0.14; // 走行アニメの接地時に靴底が路面に潜る分を持ち上げる（調整可）
+// ===== ペプシマン風：レーン／ダッシュ／HP／演出 =====
+// 自由連続の左右移動（ペプシマン式・レーンなし）
+const PLAYER_HALF=2.6;             // 道路内に収めるx範囲
+const COLL_X=0.7;                  // 当たり判定の基本x半幅（障害物のhalfを加算）
+let px=0, pvx=0, steerDir=0;       // x位置 / 横速度 / 入力方向(-1/0/+1)
+const LAT_ACCEL=46, LAT_MAX=7.4, LAT_DAMP=20;
+let invertCtl=false;               // 操作反転ギミック用
+let dashT=0, dashCD=0, invulnT=0, knockT=0, knockVz=0;
+const DASH_DUR=0.45, DASH_CD=1.4, DASH_BOOST=10;
+let hp=3; const HP_MAX=3;
+const FOV_BASE=48; let fovKick=0;
+let hitstop=0, slowmo=0;
+let mode='run', nextChaseAt=600, chaseEnd=0, chaseGap=1, pursuer=null; // チェイス演出
+let lastSection=0;                 // 区間（難易度段階）
+const CAM_CHASE=new THREE.Vector3(0,5.8,-15.5);  // チェイス時：前方やや高めから振り返る（金鯱を見せる）
+let chaseCam=0, camBaseX=0;        // カメラのモード遷移補間 / 揺れを除いた基準x
+const pops=[];                     // 取得演出の小物
+const elSc=document.getElementById('sc'), elDist=document.getElementById('dist'),
+      elCn=document.getElementById('cn'), elOver=document.getElementById('over'), elOvs=document.getElementById('ovs');
+
+// ===== BGM（ナゴヤ人間MUSICから7曲をシャッフル再生）=====
+const BGM_TRACKS=['music/bgm1.mp3','music/bgm2.mp3','music/bgm3.mp3','music/bgm4.mp3','music/bgm5.mp3','music/bgm6.mp3','music/bgm7.mp3'];
+const BGM_VOL=0.55, BGM_VOL_DEAD=0.16;
+const bgmAudio=new Audio(); bgmAudio.volume=BGM_VOL; bgmAudio.preload='auto';
+let bgmOn=true, bgmStarted=false, bgmOrder=[], bgmIdx=0;
+function shuffleBgm(){ bgmOrder=BGM_TRACKS.map((_,i)=>i); for(let i=bgmOrder.length-1;i>0;i--){const j=(Math.random()*(i+1))|0; [bgmOrder[i],bgmOrder[j]]=[bgmOrder[j],bgmOrder[i]];} bgmIdx=0; }
+function playNextBgm(){ if(!bgmOn)return; if(bgmIdx>=bgmOrder.length)shuffleBgm(); bgmAudio.src=BGM_TRACKS[bgmOrder[bgmIdx++]]; const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
+bgmAudio.addEventListener('ended',playNextBgm);
+function startBgm(){ if(bgmStarted||!bgmOn)return; bgmStarted=true; shuffleBgm(); playNextBgm(); }
+const elBgm=document.getElementById('bgm');
+elBgm.addEventListener('pointerdown',e=>e.stopPropagation());
+elBgm.addEventListener('pointerup',e=>e.stopPropagation());
+elBgm.addEventListener('click',(e)=>{ e.stopPropagation();
+  bgmOn=!bgmOn; elBgm.textContent=bgmOn?'🔊':'🔇';
+  if(bgmOn){ if(starMusicOn){ const p=starAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
+    else if(!bgmStarted)startBgm(); else { const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
+  else { bgmAudio.pause(); starAudio.pause(); }
+});
+// ブラウザの自動再生制限：最初のユーザー操作で開始
+['keydown','pointerdown'].forEach(ev=>addEventListener(ev,startBgm,{once:false}));
+// 星（無敵）状態のキラキラBGM
+const starAudio=new Audio('music/star.mp3'); starAudio.loop=true; starAudio.volume=0.62; starAudio.preload='auto';
+let starMusicOn=false;
+function enterStarMusic(){ if(!bgmOn||starMusicOn)return; starMusicOn=true; bgmAudio.pause(); starAudio.currentTime=0; const p=starAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
+function exitStarMusic(){ if(!starMusicOn)return; starMusicOn=false; starAudio.pause();
+  if(bgmOn&&bgmStarted){ const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
+
+// ===== 効果音（WebAudio合成・ファイル不要）=====
+let actx=null;
+function sfx(name){ try{
+  if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+  if(actx.state==='suspended') actx.resume();
+  const P={ jump:[520,900,0.16,'square',0.16], slide:[320,130,0.22,'sawtooth',0.15], dash:[200,1300,0.22,'sawtooth',0.18],
+    coin:[950,1600,0.08,'square',0.14], hit:[180,55,0.26,'square',0.28], crash:[420,40,0.5,'sawtooth',0.3],
+    near:[1300,420,0.1,'sine',0.1], up:[600,1250,0.26,'triangle',0.18], chase:[150,150,0.3,'square',0.22], star:[700,1500,0.3,'triangle',0.18] }[name];
+  if(!P)return; const now=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
+  const[f0,f1,dur,type,vol]=P; o.type=type; o.connect(g); g.connect(actx.destination);
+  o.frequency.setValueAtTime(f0,now); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),now+dur);
+  g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
+  o.start(now); o.stop(now+dur+0.02);
+}catch(e){} }
+function doJump(){ if(state==='run'&&grounded){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; sfx('jump');} }
+function doSlide(){ if(state==='run'&&grounded){sliding=true;slideT=0.62; sfx('slide');} }
+function setSteer(d){ if(state!=='run'){steerDir=0;return;} steerDir = invertCtl? -d : d; }
+function doDash(){ if(state!=='run'||dashCD>0||dashT>0)return;
+  dashT=DASH_DUR; dashCD=DASH_CD; invulnT=Math.max(invulnT,DASH_DUR);
+  fovKick=Math.max(fovKick,18); camShake=Math.max(camShake,0.18); sfx('dash'); }
+addEventListener('keydown',e=>{
+  if(e.repeat)return;
+  if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();doJump();}
+  else if(e.code==='ArrowDown'||e.code==='KeyS'){e.preventDefault();doSlide();}
+  else if(e.code==='ArrowLeft'||e.code==='KeyA'){e.preventDefault();setSteer(-1);}
+  else if(e.code==='ArrowRight'||e.code==='KeyD'){e.preventDefault();setSteer(1);}
+  else if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyF'){e.preventDefault();doDash();}
+  else if(e.code==='Enter'&&state==='dead')restart();
+});
+addEventListener('keyup',e=>{ if(['ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) steerDir=0; });
+// タッチ：左右ホールド＝その方向へ移動 ・ 上スワイプ＝ジャンプ ・ 下スワイプ＝スライド ・ ダブルタップ＝ダッシュ
+let ptX=0,ptY=0,ptT=0,lastTap=0,steerPid=null;
+function holdSteer(cx){ if(state==='run') setSteer(cx<W()*0.5?-1:1); }
+addEventListener('pointerdown',e=>{ ptX=e.clientX; ptY=e.clientY; ptT=performance.now(); steerPid=e.pointerId; holdSteer(e.clientX); });
+addEventListener('pointermove',e=>{ if(state==='run' && e.pointerId===steerPid) holdSteer(e.clientX); });
+addEventListener('pointerup',e=>{ if(e.pointerId===steerPid){ steerDir=0; steerPid=null; } if(state==='dead')return;
+  const dx=e.clientX-ptX, dy=e.clientY-ptY, adx=Math.abs(dx), ady=Math.abs(dy), now=performance.now();
+  if(adx<26&&ady<26){ if(now-lastTap<320){ doDash(); lastTap=0; } else lastTap=now; } // タップ→ダブルタップでダッシュ
+  else if(ady>adx){ dy<0?doJump():doSlide(); }                                        // 縦スワイプ
+});
+addEventListener('pointercancel',e=>{ if(e.pointerId===steerPid){steerDir=0;steerPid=null;} });
+document.getElementById('retry').addEventListener('click',restart);
+
+function reset(){
+  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
+  coins.forEach(c=>scene.remove(c)); coins.length=0;
+  emeralds.forEach(e=>scene.remove(e)); emeralds.length=0;
+  pops.forEach(p=>scene.remove(p.m)); pops.length=0;
+  if(pursuer){scene.remove(pursuer); pursuer=null;}
+  scroll=0; speed=baseSpeed; py=0; vy=0; grounded=true; sliding=false; slideT=0;
+  score=0; coinCount=0; nextOb=0; nextCoin=-6; powerT=0; deadT=0; gameTime=0;
+  px=0; pvx=0; steerDir=0; invertCtl=false; dashT=0; dashCD=0; invulnT=0; knockT=0; knockVz=0; hp=HP_MAX; fovKick=0; hitstop=0; slowmo=0;
+  mode='run'; nextChaseAt=600; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
+  atkPhase='idle'; atkT=0; if(warnMesh)warnMesh.visible=false;
+  if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0';
+  // スターは1ゲームに1〜2回だけ出現（出現距離をランダムに予約）
+  starsPlan=[ 230+Math.random()*170 ];
+  if(Math.random()<0.55) starsPlan.push( 680+Math.random()*320 );
+  if(chars.gold)chars.gold.holder.visible=false;
+  if(chars.main){chars.main.holder.visible=true; activeChar=chars.main; setAnim(chars.main,'Running'); chars.main.holder.rotation.z=0; chars.main.holder.position.z=0;}
+  state='run'; elOver.style.display='none';
+  if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;   // BGM音量を通常に戻す
+}
+function restart(){ reset(); }
+function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0.6; slowmo=0.35; sfx('crash');
+  if(mode==='chase')endChase();
+  bgmAudio.volume=BGM_VOL_DEAD;                    // ゲームオーバー中はBGMを小さく
+  if(activeChar&&activeChar.ACT['KnockDown']) setAnim(activeChar,'KnockDown'); }
+// 障害物を吹っ飛ばす（無敵スマッシュ／ダッシュ破壊で共用）
+function smash(o){ const ud=o.userData; ud.smashed=true; ud.vx=(Math.random()-0.5)*7; ud.vy=11+Math.random()*5; ud.vz=7; ud.spin=(Math.random()-0.5)*16; }
+// 被弾（HP-1＋後方ノックバック＋ヒットストップ）。無敵中は無効
+function takeHit(){ if(invulnT>0||powerT>0||dashT>0)return; hp--; invulnT=1.1; knockT=0.5; camShake=0.5; fovKick=Math.max(fovKick,8); hitstop=2; pvx*=0.3; sfx('hit');
+  if(mode==='chase') chaseGap=Math.max(0, chaseGap-0.3);
+  if(hp<=0) gameOver(); }
+// 即死（穴・正面衝突など）：HP無視で一発アウト
+function takeHitHard(){ if(powerT>0||dashT>0||invulnT>0)return; hp=0; camShake=0.7; hitstop=2; gameOver(); }
+// 取得演出（拡大して消える小球）
+function spawnPop(x,y,col){ const m=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),
+  new THREE.MeshBasicMaterial({color:col||'#ffe04a',transparent:true,depthWrite:false}));
+  m.position.set(x,y,0.4); scene.add(m); pops.push({m,life:0.3,max:0.3}); }
+// 追跡（緊張）演出：加速＋赤ビネット＋バナー＋捕獲メーター。巨大金鯱の前方視点演出は次フェーズ。
+const elVig=document.getElementById('vig'), elBanner=document.getElementById('banner'), elGap=document.getElementById('gapbar');
+function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner.style.opacity='1';
+  elBanner.style.animation='none'; void elBanner.offsetWidth; elBanner.style.animation='bpop .32s ease-out';
+  clearTimeout(banner._t); banner._t=setTimeout(()=>{elBanner.style.opacity='0';}, ms||1600); }
+// 巨大な金鯱（追跡者）。前方視点チェイス中、背後にそびえて迫る
+function makeShachi(){ const g=new THREE.Group();
+  const m=placeModel('shachi',8.5,Math.PI);   // Meshyの金鯱・大きく・プレイヤー方向へ
+  if(m){ m.traverse(o=>{if(o.isMesh)o.castShadow=false}); g.add(m); }
+  else { const gold=new THREE.MeshStandardMaterial({color:'#e8c349',metalness:0.9,roughness:0.25,emissive:'#5a4410',emissiveIntensity:0.45});
+    const body=new THREE.Mesh(new THREE.SphereGeometry(3.8,16,12),gold); body.scale.set(1,1.7,2.4); body.position.y=4; g.add(body); }
+  return g;
+}
+// 攻撃予告マーカー（地面の赤い輪）
+function makeWarn(){ const g=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.RingGeometry(0.85,1.35,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:'#ff2a2a',transparent:true,opacity:0.8,depthWrite:false,side:THREE.DoubleSide}));
+  const fill=new THREE.Mesh(new THREE.CircleGeometry(0.85,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:'#ff3030',transparent:true,opacity:0.28,depthWrite:false}));
+  ring.position.y=0.06; fill.position.y=0.05; g.add(ring); g.add(fill); g.userData={ring}; g.visible=false; return g;
+}
+let atkPhase='idle', atkT=0, atkX=0, warnMesh=null;
+function startChase(){ mode='chase'; chaseGap=1; chaseEnd=scroll+360; sfx('chase');
+  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;   // チェイス中は通常障害物なし＝金鯱だけに集中
+  if(!pursuer){ pursuer=makeShachi(); scene.add(pursuer); } pursuer.visible=true; pursuer.position.set(0,3.6,10.5); pursuer.rotation.set(0,0,0);
+  if(!warnMesh){ warnMesh=makeWarn(); scene.add(warnMesh); } warnMesh.visible=false;
+  atkPhase='idle'; atkT=1.0;
+  if(elGap)elGap.parentElement.style.opacity='1'; banner('巨大金鯱が来た！横に避けろ！',2000); }
+function endChase(){ mode='run'; nextChaseAt=scroll+1300;
+  if(pursuer)pursuer.visible=false; if(warnMesh)warnMesh.visible=false;
+  if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0'; banner('逃げ切った！',1500); }
+
+// キャラのAABB（当たり判定用の高さ）
+function charBox(){
+  const cy=py; // 足元のy
+  if(sliding) return {bottom:cy, top:cy+1.2};
+  return {bottom:cy, top:cy+2.5};
+}
+
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt=Math.min(0.033,(now-(frame.last||now))/1000); frame.last=now;
+  if(hitstop>0){ hitstop--; renderer.render(scene,camera); return; } // 衝撃の一瞬停止
+  if(slowmo>0){ slowmo-=dt; dt*=0.4; }                               // クラッシュ直後スロー
+  t+=dt;
+
+  if(state==='run'){
+    // ペプシマン式：区間内はほぼ一定速。区間ごとに段階的に上げる
+    const sec = scroll<240?0:scroll<540?1:scroll<900?2:3;
+    if(sec>lastSection){ lastSection=sec; baseSpeed=11+sec; banner('SECTION '+(sec+1),1300); }
+    speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0);
+    scroll+=speed*dt;
+    score+=speed*dt*1.2;
+    // ジャンプ物理
+    if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true;}}
+    if(sliding){slideT-=dt; if(slideT<=0)sliding=false;}
+    // 各種タイマー
+    if(dashT>0)dashT-=dt; if(dashCD>0)dashCD-=dt; if(invulnT>0)invulnT-=dt;
+    if(knockT>0)knockT-=dt; if(fovKick>0)fovKick-=fovKick*Math.min(1,dt*6);
+    // 通常時のみ障害物・コイン・スターをスポーン（チェイス中は金鯱だけ）
+    if(mode!=='chase'){
+      nextOb+=speed*dt; if(nextOb>0){spawnObstacle(); nextOb=-obGap(scroll);}
+      nextCoin+=speed*dt; if(nextCoin>0){spawnCoins(SPZ-6); nextCoin=-(11+Math.random()*15);}
+      if(starsPlan.length && scroll>starsPlan[0]){ spawnEmerald(SPZ-4); starsPlan.shift(); }
+    }
+    if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0; }
+    // チェイス開始・進行・終了
+    if(mode==='run' && scroll>nextChaseAt){ startChase(); }
+    else if(mode==='chase'){
+      // 金鯱の攻撃：予告(tele)→噛みつき(strike)→戻り(rec) を繰り返す。横に避ける
+      atkT-=dt;
+      if(atkPhase==='idle' && atkT<=0){ atkPhase='tele'; atkT=1.0;
+        atkX=Math.max(-2.2,Math.min(2.2, px+(Math.random()-0.5)*0.9));   // 今いる辺りを狙う＝避けさせる
+        if(warnMesh){ warnMesh.visible=true; warnMesh.position.set(atkX,0,0.2); } sfx('near'); }
+      else if(atkPhase==='tele' && atkT<=0){ atkPhase='strike'; atkT=0.3;
+        const dodged = Math.abs(px-atkX)>1.3 || powerT>0 || invulnT>0;
+        if(!dodged){ chaseGap=Math.max(0,chaseGap-0.26); knockT=0.5; camShake=0.5; hitstop=2; invulnT=0.7; pvx*=0.3; sfx('hit'); }
+        else { score+=25; camShake=0.12; } }
+      else if(atkPhase==='strike' && atkT<=0){ atkPhase='rec'; atkT=0.55; if(warnMesh)warnMesh.visible=false; }
+      else if(atkPhase==='rec' && atkT<=0){ atkPhase='idle'; atkT=0.35; }
+      chaseGap=Math.min(1, chaseGap+dt*0.018);          // 避け続ければ少しずつ回復
+      if(chaseGap<=0){ gameOver(); } else if(scroll>chaseEnd){ endChase(); }
+    }
+  } else if(state==='dead'){
+    deadT+=dt;
+    if(deadT>1.4 && elOver.style.display!=='flex'){
+      elOvs.textContent='スコア '+(score|0)+' ・ コイン '+coinCount; elOver.style.display='flex'; }
+  }
+
+  // キャラ切替（パワーアップ中＝金スター、通常＝名古屋人間）
+  const wantCh=(powerT>0&&chars.gold)?chars.gold:chars.main;
+  if(wantCh&&wantCh!==activeChar){ if(activeChar)activeChar.holder.visible=false; activeChar=wantCh; activeChar.holder.visible=true; }
+  // 自由連続の左右移動（Dパッド式：押し続けで移動・離して停止）
+  if(state==='run'){
+    pvx += steerDir*LAT_ACCEL*dt;
+    if(steerDir===0) pvx -= pvx*Math.min(1,LAT_DAMP*dt);
+    pvx=Math.max(-LAT_MAX,Math.min(LAT_MAX,pvx));
+    px += pvx*dt;
+    if(px>PLAYER_HALF){px=PLAYER_HALF;pvx=0;} if(px<-PLAYER_HALF){px=-PLAYER_HALF;pvx=0;}
+  }
+  // アニメ・姿勢（走り/ジャンプ/スライドをクロスフェード＋ルートモーション打ち消し）
+  if(modelReady&&activeChar){
+    const ch=activeChar;
+    if(state==='run'){ setAnim(ch, sliding ? ANIM_FOR.slide : (!grounded ? ANIM_FOR.jump : ANIM_FOR.run) ); }
+    ch.mixer.update((state==='run'||state==='dead')?dt:0);   // dead中はノックダウンを再生
+    if(ch.hips&&ch.hipsBind){ ch.hips.position.x=ch.hipsBind.x; ch.hips.position.z=ch.hipsBind.z; }
+    ch.holder.position.x = px;
+    ch.holder.position.y = py + (state==='dead' ? DEAD_LIFT*Math.min(1,deadT*2) : FOOT_LIFT);
+    ch.holder.position.z = (state==='run'&&knockT>0) ? Math.sin(knockT/0.5*Math.PI)*1.4 : 0; // 後方ノックバック
+    ch.holder.rotation.z = state==='dead'?0:-pvx*0.045;                                       // 横速度で傾く
+    ch.holder.visible = (state==='run'&&invulnT>0&&powerT<=0) ? (Math.sin(t*40)>0) : true; // 被弾点滅
+  }
+  blob.position.x=px;
+  blob.material.opacity=0.55*(1-Math.min(py/4,0.75));
+  blob.scale.setScalar(1-Math.min(py/9,0.4)*(sliding?0.6:1));
+
+  // dead中はワールドを停止（コースを止める）。スマッシュした破片だけは慣性で飛ぶ
+  const ws = (state==='run') ? speed : 0;
+  // 障害物の移動・動き・当たり判定（無敵中はスマッシュ）
+  const cb=charBox();
+  for(let i=obstacles.length-1;i>=0;i--){const o=obstacles[i]; const ud=o.userData;
+    o.position.z+=ws*dt;
+    if(ud.smashed){
+      o.position.x+=ud.vx*dt; o.position.y+=ud.vy*dt; o.position.z+=ud.vz*dt; ud.vy-=GRAV*dt;
+      o.rotation.x+=ud.spin*dt; o.rotation.z+=ud.spin*0.6*dt;
+      if(o.position.y<-7||o.position.z>16){scene.remove(o);obstacles.splice(i,1);} continue;
+    }
+    if(ud.upd && state==='run') ud.upd(o, t, dt, speed);
+    if(!ud.passed && o.position.z>-0.8 && o.position.z<0.8 && state==='run'){
+      ud.passed=true;
+      const xo=Math.abs(px-o.position.x);
+      const half=ud.half||0.7;
+      const shareLane = ud.span ? true : (xo < COLL_X+half);  // 全幅は常に共有
+      if(shareLane){
+        let hit = ud.act==='jump' ? (cb.bottom < ud.thr-0.12)
+                : ud.act==='slide'? (cb.top > ud.barY+0.05)
+                : true;                                   // dodge：x重なり＝当たり
+        if(hit){
+          if(ud.instakill && powerT<=0 && dashT<=0){ takeHitHard(); }         // 穴＝即死
+          else if(powerT>0){ smash(o); score+=30; camShake=0.2; }             // 無敵スマッシュ
+          else if(dashT>0 && ud.breakable){ smash(o); score+=15; camShake=0.15; } // ダッシュ破壊
+          else { takeHit(); }
+        }
+      } else if(!ud.span && xo<COLL_X+half+0.7){ score+=10; sfx('near'); }  // ニアミス・ボーナス
+    }
+    if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
+  }
+  // 缶（旧コイン）：レーンが合っていれば取得。25個で1UP
+  for(let i=coins.length-1;i>=0;i--){const c=coins[i];
+    c.position.z+=ws*dt; c.rotation.y+=dt*4;
+    if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.0){
+      const cy=c.position.y; if(cy>cb.bottom-0.3 && cy<cb.top+0.3){
+        c.userData.alive=false; coinCount++; score+=20; spawnPop(c.position.x,c.position.y,'#7fd0ff'); sfx('coin');
+        if(coinCount%25===0 && hp<HP_MAX){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); }
+        scene.remove(c); coins.splice(i,1); continue; }
+    }
+    if(c.position.z>12){scene.remove(c); coins.splice(i,1);}
+  }
+  // エメラルドの星（取ると20秒間 金スターに変身）
+  for(let i=emeralds.length-1;i>=0;i--){const e=emeralds[i];
+    e.position.z+=ws*dt; e.userData.star.rotation.y+=dt*2.6; e.userData.star.rotation.z=Math.sin(t*2)*0.18;
+    e.userData.glow.lookAt(camera.position);
+    if(e.userData.alive && Math.abs(e.position.z)<0.95 && Math.abs(px-e.position.x)<1.1){
+      const ey=e.position.y; if(ey>cb.bottom-0.6 && ey<cb.top+0.7){
+        e.userData.alive=false; powerT=20; score+=100; camShake=0.3; spawnPop(e.position.x,e.position.y,'#5ff0b0'); sfx('star'); scene.remove(e); emeralds.splice(i,1); continue; }
+    }
+    if(e.position.z>12){scene.remove(e); emeralds.splice(i,1);}
+  }
+  // 取得演出（拡大して消える小球）
+  for(let i=pops.length-1;i>=0;i--){const p=pops[i]; p.life-=dt; const k=1-p.life/p.max;
+    p.m.scale.setScalar(0.5+k*2.0); p.m.material.opacity=Math.max(0,1-k); p.m.position.z+=ws*dt*0.4;
+    if(p.life<=0){scene.remove(p.m); pops.splice(i,1);} }
+
+  // 道路ペイント・ビルのスクロール
+  roadTex.offset.y -= ws*dt/ROAD_TILE;   // アスファルト面が流れて見える
+  dashes.forEach(d=>{d.position.z+=ws*dt; if(d.position.z>NEARZ)d.position.z-=60*5;});
+  buildings.forEach(b=>{b.position.z+=ws*dt; b.userData.wins.forEach(w=>w.position.z+=ws*dt);
+    if(b.position.z>26){b.position.z-=BLEN; b.userData.wins.forEach(w=>w.position.z-=BLEN);}});
+  props.forEach(p=>{p.position.z+=ws*dt; if(p.position.z>NEARZ)p.position.z-=PROPLEN;});
+  // ランドマーク（名古屋城・テレビ塔・オアシス21・セントラルタワーズ・観覧車）のスクロールと回転
+  landmarks.forEach(g=>{ g.position.z+=ws*dt;
+    if(g.userData.wheel) g.userData.wheel.rotation.z += (g.userData.spin||0)*dt;
+    if(g.position.z>40) g.position.z-=g.userData.span; });
+
+  // カメラ：通常＝中央背後で道路を真っ直ぐ／チェイス＝前方から振り返る。遷移は滑らかに補間、揺れは別加算
+  chaseCam += ((mode==='chase'?1:0)-chaseCam)*(1-Math.exp(-7*dt));
+  const pull=(dashT>0?0.4:0);
+  // 基準（通常）とチェイスの目標をブレンド
+  const tBx=px*0.5, tBy=CAM_BASE.y+pull+py*0.10, tBz=CAM_BASE.z+pull*1.2;
+  const tCx=px*0.4, tCy=CAM_CHASE.y+py*0.12,     tCz=CAM_CHASE.z;
+  const cx=tBx+(tCx-tBx)*chaseCam, cy=tBy+(tCy-tBy)*chaseCam, cz=tBz+(tCz-tBz)*chaseCam;
+  const lBx=px*0.35,lBy=1.2+py*0.25,lBz=-16, lCx=px*0.3,lCy=3.0+py*0.2,lCz=9;
+  const lx=lBx+(lCx-lBx)*chaseCam, ly=lBy+(lCy-lBy)*chaseCam, lz=lBz+(lCz-lBz)*chaseCam;
+  camBaseX += (cx-camBaseX)*(1-Math.exp(-6*dt));                          // x はイージング（揺れを含めない）
+  const shx=camShake?(Math.random()-0.5)*camShake:0, shy=camShake?(Math.random()-0.5)*camShake:0;
+  camera.position.set(camBaseX+shx, cy+shy, cz);
+  camera.lookAt(lx,ly,lz);
+  camera.fov=FOV_BASE+fovKick+chaseCam*5; camera.updateProjectionMatrix();
+  if(camShake>0)camShake-=dt*1.6;
+  // 追跡者（金鯱）：チェイス中、背後(+z)からgapに応じて迫る
+  if(pursuer && pursuer.visible){
+    // 金鯱本体を動かす：予告で仰け反り→噛みつきで前へ突進＆頭を下げる→戻る
+    let fx=atkX*0.3, fz=10.5, fy=3.6, pitch=0;
+    if(atkPhase==='tele'){ fx=atkX*0.5; fz=11.5; fy=4.6; pitch=-0.28; }
+    else if(atkPhase==='strike'){ fx=atkX*0.8; fz=4.5; fy=1.0; pitch=0.5; }
+    else if(atkPhase==='rec'){ fx=atkX*0.3; fz=10.5; fy=3.6; pitch=0; }
+    const ez=atkPhase==='strike'?20:7;
+    pursuer.position.x += (fx-pursuer.position.x)*(1-Math.exp(-9*dt));
+    pursuer.position.z += (fz-pursuer.position.z)*(1-Math.exp(-ez*dt));
+    pursuer.position.y = fy+Math.sin(t*2.2)*0.3;
+    pursuer.rotation.x += (pitch-pursuer.rotation.x)*(1-Math.exp(-ez*dt));
+    pursuer.rotation.y = Math.sin(t*1.2)*0.06;
+  }
+  // 警告マーカーの脈動
+  if(warnMesh && warnMesh.visible){ const p=1+Math.sin(t*16)*0.14;
+    warnMesh.scale.set(p,1,p); if(warnMesh.userData.ring) warnMesh.userData.ring.material.opacity=0.5+0.4*Math.abs(Math.sin(t*13)); }
+  // チェイスの赤ビネット＋捕獲メーター
+  if(mode==='chase'){ const beat=chaseGap<0.4?Math.abs(Math.sin(t*6))*0.18:0;
+    if(elVig)elVig.style.opacity=String(0.22+(1-chaseGap)*0.7+beat);   // 迫るほど赤く＋鼓動
+    if(elGap)elGap.style.width=(chaseGap*100)+'%'; }
+
+  // 星（無敵）状態に入ったら/抜けたらBGMを切替
+  if(powerT>0 && prevPowerT<=0) enterStarMusic();
+  else if(powerT<=0 && prevPowerT>0) exitStarMusic();
+  prevPowerT=powerT;
+
+  // HUD
+  elSc.textContent=score|0; elCn.textContent=coinCount;
+  if(elHp) elHp.textContent='❤️'.repeat(Math.max(0,hp))+'🖤'.repeat(Math.max(0,HP_MAX-hp));
+  elDist.textContent = powerT>0 ? ('⭐ スターパワー '+Math.ceil(powerT)+'s')
+    : (mode==='chase' ? '🐟 逃走中！' : ((scroll|0)+' m'));
+  // S→G 進捗バー＋ランナーマーカー＋タイマー
+  if(state==='run') gameTime+=dt;
+  if(elProgFill){ const pr=(scroll%STAGE_LEN)/STAGE_LEN; elProgFill.style.width=(pr*100)+'%';
+    if(elProgRun) elProgRun.style.left=(pr*100)+'%'; }
+  if(elTimer){ const tt=gameTime|0; elTimer.textContent=(tt/60|0)+':'+('0'+(tt%60)).slice(-2); }
+
+  renderer.render(scene,camera);
+}
+let camShake=0, prevPowerT=0, gameTime=0;
+const STAGE_LEN=800;
+const elHp=document.getElementById('hp'), elProgFill=document.getElementById('progfill'),
+      elProgRun=document.getElementById('progrun'), elTimer=document.getElementById('timer');
+addEventListener('resize',()=>{camera.aspect=W()/H();camera.updateProjectionMatrix();renderer.setSize(W(),H());});
+requestAnimationFrame(frame);
+window.__3D={scene,camera,renderer,get model(){return activeChar&&activeChar.holder}};
+window.__game={get state(){return state}, get obstacles(){return obstacles}, get py(){return py},
+  get grounded(){return grounded}, get sliding(){return sliding}, get scroll(){return scroll},
+  get speed(){return speed}, get powerT(){return powerT}, get chars(){return chars},
+  jump:doJump, slide:doSlide, steer(d){setSteer(d);}, dash:doDash, restart:restart,
+  get px(){return px;}, get pvx(){return pvx;}, get hp(){return hp;}, get mode(){return mode;},
+  startChase(){startChase();}, endChase(){endChase();},
+  emerald(){powerT=20;},
+  spawnOb(){spawnObstacle();}, spawnPat(){spawnPattern();}, kill(){gameOver();}, setScroll(v){scroll=v;},
+  setFootLift(v){FOOT_LIFT=v;}, get footLift(){return FOOT_LIFT;},
+  get deadT(){return deadT;}, render(){renderer.render(scene,camera);},
+  stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}}
+};
+}catch(e){window.__err=(e&&e.message)+' @@ '+((e&&e.stack)||'').split('\n').slice(1,3).join(' | ');console.error('SETUP ERR',e);} })();
+</script>
+</body>
+</html>

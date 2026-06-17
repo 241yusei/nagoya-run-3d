@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+
+# 未使用・重い素材は公開しない
+facades/
+landmarks/
+models/*.glb
+character/*
+!character/nagoya_opt.glb
+!character/star_anim_opt.glb
+!character/knockdown_anim.glb
