@@ -87,6 +87,43 @@
   #combo span{font-size:12px;letter-spacing:2px;font-weight:800}
   #startbest{margin-top:14px;font-size:15px;font-weight:800;color:#ffd84a;text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:18px}
   #over h1{animation:bpop .4s ease-out}
+  /* ===== メタUI（ショップ/ミッション/デイリー/ポーズ）===== */
+  .menubtns{display:flex;gap:10px;margin-top:18px}
+  .mbtn{background:rgba(255,255,255,.15);color:#fff;border:2px solid rgba(255,255,255,.32);border-radius:30px;
+    font-weight:800;font-size:15px;padding:11px 22px;cursor:pointer;pointer-events:auto}
+  .mbtn:active{transform:scale(.96)}
+  .ov{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(10,14,26,.74);backdrop-filter:blur(4px);z-index:60;padding:16px;box-sizing:border-box}
+  .ov.show{display:flex}
+  .card{background:#14182a;border:2px solid #2a3050;border-radius:20px;width:min(440px,95vw);max-height:88vh;
+    overflow-y:auto;padding:18px;box-sizing:border-box;box-shadow:0 18px 50px rgba(0,0,0,.55);color:#eef;text-align:left}
+  .card h2{margin:0 0 4px;font-size:25px;font-weight:900;text-align:center;color:#fff}
+  .bal{text-align:center;font-weight:900;color:#ffd84a;font-size:17px;margin:4px 0 12px}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{flex:1;padding:9px;border-radius:12px;background:#1d2440;color:#9fb0d8;font-weight:800;text-align:center;cursor:pointer;font-size:14px}
+  .tab.on{background:#e8362e;color:#fff}
+  .row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;background:#1b2138;margin-bottom:8px}
+  .row .ic{font-size:23px;width:32px;text-align:center;flex:0 0 auto}
+  .row .info{flex:1;min-width:0}
+  .row .nm{font-weight:800;font-size:15px}
+  .row .ds{font-size:12px;color:#9fb0d8}
+  .row .lv{font-size:11px;color:#7fd0ff;font-weight:800;margin-top:2px}
+  .row button{background:#ffd84a;color:#222;border:0;border-radius:20px;font-weight:900;padding:9px 13px;font-size:13px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
+  .row button:disabled{background:#39405e;color:#7b85a6;opacity:1;cursor:default}
+  .row button.owned{background:#2a8a4a;color:#fff}
+  .row button.eq{background:#4f74d0;color:#fff}
+  .barwrap{height:6px;background:#0d1124;border-radius:4px;overflow:hidden;margin-top:5px}
+  .barwrap i{display:block;height:100%;background:linear-gradient(90deg,#4fd0ff,#1f7fe0)}
+  .closebtn{margin-top:14px;width:100%;background:#e8362e;color:#fff;border:0;border-radius:24px;font-weight:900;font-size:17px;padding:13px;cursor:pointer}
+  .dailyrw{font-size:46px;margin:6px}
+  #pausebtn{position:fixed;top:106px;right:18px;z-index:34;font-size:17px;cursor:pointer;pointer-events:auto;color:#fff;
+    background:rgba(0,0,0,.32);border-radius:50%;width:38px;height:38px;display:none;align-items:center;justify-content:center}
+  #reviveBtn{margin-top:10px;background:#ffd84a;color:#222;border:0;border-radius:40px;font-size:20px;font-weight:900;padding:14px 40px;cursor:pointer;box-shadow:0 8px 22px rgba(255,216,74,.4)}
+  .setrow{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:12px;background:#1b2138;margin-bottom:8px;font-weight:800}
+  .toggle{width:52px;height:28px;border-radius:16px;background:#39405e;position:relative;cursor:pointer;transition:background .2s}
+  .toggle.on{background:#2a8a4a}
+  .toggle i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s}
+  .toggle.on i{left:27px}
 </style>
 </head>
 <body>
@@ -104,7 +141,11 @@
 <div id="fx"></div>
 <div id="combo"><b id="combomult">x1</b><span id="combocnt">COMBO</span></div>
 <div id="banner"></div>
-<div id="over"><h1>GAME OVER</h1><p id="ovs"></p><button id="retry">RETRY</button></div>
+<div id="pausebtn" title="Pause">⏸</div>
+<div id="over"><h1>GAME OVER</h1><p id="ovs"></p><button id="reviveBtn">REVIVE</button><button id="retry">RETRY</button></div>
+<div id="menu" class="ov"><div class="card" id="menucard"></div></div>
+<div id="daily" class="ov"><div class="card" id="dailycard"></div></div>
+<div id="pause" class="ov"><div class="card" id="pausecard"></div></div>
 <div id="start"><div id="startinner">
   <div id="logo"><span class="ln1">Nagoya</span><span class="ln2">NINGEN</span><span class="ln3">RUN</span></div>
   <div id="logo3d">3D</div>
@@ -116,6 +157,7 @@
   </div>
   <div id="starttip">🥤 Grab coins, dodge, and run ／ A giant boss chases you every stage</div>
   <div id="startbest"></div>
+  <div class="menubtns"><button class="mbtn" id="toShop">🛒 SHOP</button><button class="mbtn" id="toMiss">🎯 GOALS</button></div>
 </div></div>
 <script src="libs/three.min.js"></script>
 <script src="libs/GLTFLoader.js"></script>
@@ -469,7 +511,7 @@ new THREE.GLTFLoader().load('character/knockdown_anim.glb',(g)=>{
   for(const k in chars) addKnock(chars[k]);
   console.log('knockdown loaded');
 },undefined,(e)=>console.warn('knockdown load error',e));
-loadChar('character/nagoya_opt.glb','main',(ch)=>{ activeChar=ch; ch.holder.visible=true; modelReady=true; });
+loadChar('character/nagoya_opt.glb','main',(ch)=>{ activeChar=ch; ch.holder.visible=true; modelReady=true; if(typeof applySkin==='function')applySkin(); });
 loadChar('character/star_anim_opt.glb','gold');
 function setAnim(ch,name){
   if(!ch||name===ch.curAnim||!ch.ACT[name])return;
@@ -746,9 +788,9 @@ function sfx(name,rate){ if(!bgmOn)return; try{   // ミュート中(🔇)は効
   g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
   o.start(now); o.stop(now+dur+0.02);
 }catch(e){} }
-function doJump(){ if(state==='run'&&grounded){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; squashT=0.16; squashKind=1; sfx('jump'); buzz(12);} }
-function doSlide(){ if(state==='run'&&grounded){sliding=true;slideT=0.62; sfx('slide');} }
-function setSteer(d){ if(state!=='run'){steerDir=0;return;} steerDir=d; }   // 反転は積分時に適用（押し続け中も即反映）
+function doJump(){ if(state==='run'&&grounded&&!paused){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; squashT=0.16; squashKind=1; runStat.jump++; sfx('jump'); buzz(12);} }
+function doSlide(){ if(state==='run'&&grounded&&!paused){sliding=true;slideT=0.62; sfx('slide');} }
+function setSteer(d){ if(state!=='run'||paused){steerDir=0;return;} steerDir=d; }   // 反転は積分時に適用（押し続け中も即反映）
 // スケートボード（下り爆走ライド用）
 function makeBoard(){ const g=new THREE.Group();
   const deck=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.08,1.8),new THREE.MeshStandardMaterial({color:'#c0382b',roughness:0.5,emissive:'#3a0e0a',emissiveIntensity:0.2})); deck.position.y=0.2; g.add(deck);
@@ -760,9 +802,9 @@ function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
   if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
   banner('🛹 Skateboard! Bomb down the hill (heavy steering)',2200); }
-function doDash(){ if(state!=='run'||dashCD>0||dashT>0)return;
+function doDash(){ if(state!=='run'||paused||dashCD>0||dashT>0)return;
   dashT=DASH_DUR; dashCD=DASH_CD; invulnT=Math.max(invulnT,DASH_DUR);
-  fovKick=Math.max(fovKick,18); camShake=Math.max(camShake,0.18); sfx('dash'); }
+  fovKick=Math.max(fovKick,18); camShake=Math.max(camShake,0.18); sfx('dash'); buzz(15); }
 addEventListener('keydown',e=>{
   if(e.repeat)return;
   if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();doJump();}
@@ -811,7 +853,7 @@ updateStartBest();
 
 // ===== コンボ（連続取得・回避でスコア倍率UP。被弾でリセット）=====
 let combo=0, comboT=0, mult=1, lastMilestone=0;
-function addCombo(n){ combo+=(n||1); comboT=2.4; mult=Math.min(8, 1+Math.floor(combo/4)*0.5); }
+function addCombo(n){ combo+=(n||1); comboT=2.4; mult=Math.min(8, 1+Math.floor(combo/4)*0.5); if(typeof runStat!=='undefined'&&mult>runStat.multmax)runStat.multmax=mult; }
 function breakCombo(){ combo=0; comboT=0; mult=1; }
 
 // ===== フローティングテキスト（スクリーン空間の +N / COMBO / NICE）＆紙吹雪 =====
@@ -831,6 +873,116 @@ function confetti(){ if(!elFx)return; const cols=['#ffd84a','#e8362e','#4fd0ff',
 // ===== スカッシュ＆ストレッチ（ジャンプ/着地のプニッと感）=====
 let squashT=0, squashKind=0;   // kind:1=ストレッチ(跳躍) / -1=スクワッシュ(着地)
 
+// ===== Pass2: リテンション・メッシュ（ショップ/スキン/ミッション/デイリー/リバイブ/ポーズ）=====
+let runStat={dist:0,coins:0,near:0,multmax:0,jump:0}, bankedCoins=0, reviveUsed=false, paused=false;
+function resetRunStat(){ runStat={dist:0,coins:0,near:0,multmax:0,jump:0}; bankedCoins=0; reviveUsed=false; }
+// 着せ替え（1マテリアル＝テクスチャ着色を全身ティントで変化）
+const SKINS=[
+  {id:'default',name:'Nagoya Ningen',cost:0,tint:'#ffffff'},
+  {id:'gold',   name:'Gold Hero',    cost:600,tint:'#ffd24a'},
+  {id:'shadow', name:'Shadow',       cost:800,tint:'#7c7c98'},
+  {id:'sakura', name:'Sakura',       cost:500,tint:'#ff9ebb'},
+  {id:'mint',   name:'Mint',         cost:500,tint:'#8fe8b8'},
+  {id:'aoi',    name:'Aoi',          cost:700,tint:'#8fc6ff'},
+];
+const UPGRADES=[
+  {id:'magnet',   ic:'🧲',name:'Coin Magnet',max:5,base:120,desc:'Pull coins from further'},
+  {id:'coinval',  ic:'💰',name:'Coin Value', max:5,base:150,desc:'Each coin is worth more'},
+  {id:'headstart',ic:'🚀',name:'Head Start', max:5,base:140,desc:'Start further down the road'},
+  {id:'shield',   ic:'🛡️',name:'Extra Heart', max:2,base:700,desc:'Begin with +1 HP'},
+];
+function maxHP(){ return HP_MAX+(SAVE.up.shield||0); }
+function upCost(u){ const lvl=SAVE.up[u.id]||0; return Math.round(u.base*Math.pow(2.1,lvl)); }
+function applySkin(){ const sk=SKINS.find(s=>s.id===SAVE.skin)||SKINS[0];
+  if(chars.main&&chars.main.inner) chars.main.inner.traverse(o=>{ if(o.isMesh&&o.material&&o.material.color){
+    o.material.color.set(sk.tint);
+    if(o.material.emissive){ if(sk.id==='default'){ o.material.emissive.set('#000000'); o.material.emissiveIntensity=0; }
+      else { o.material.emissive.set(sk.tint); o.material.emissiveIntensity=0.22; } }
+    o.material.needsUpdate=true; } }); }
+// ミッション（1ラン内目標・3枠・達成で報酬＋自動補充）
+const MISS_TYPES={
+  dist: {ic:'🏁',label:m=>'Run '+m+'m in one run',  opts:[600,800,1200], stat:'dist'},
+  coins:{ic:'🥤',label:m=>'Collect '+m+' coins',    opts:[30,50,80],     stat:'coins'},
+  near: {ic:'✨',label:m=>m+' near-misses',         opts:[6,12,20],      stat:'near'},
+  combo:{ic:'🔥',label:m=>'Reach a '+m+'x combo',    opts:[2.5,3.5,5],    stat:'multmax'},
+  jump: {ic:'🦘',label:m=>'Jump '+m+' times',        opts:[15,25,40],     stat:'jump'},
+};
+function rollMission(){ const keys=Object.keys(MISS_TYPES); const k=keys[(Math.random()*keys.length)|0], t=MISS_TYPES[k];
+  return {k, tgt:t.opts[(Math.random()*t.opts.length)|0], reward:60+((Math.random()*5)|0)*30}; }
+function ensureMissions(){ if(!Array.isArray(SAVE.miss)) SAVE.miss=[]; while(SAVE.miss.length<3) SAVE.miss.push(rollMission()); }
+function missCur(m){ return runStat[MISS_TYPES[m.k].stat]||0; }
+function evalMissions(){ let earned=0,any=false; for(let i=0;i<SAVE.miss.length;i++){ const m=SAVE.miss[i];
+  if(missCur(m)>=m.tgt){ earned+=m.reward; SAVE.coins+=m.reward; SAVE.miss[i]=rollMission(); any=true; } }
+  if(any)save(); return earned; }
+// デイリー報酬＋ストリーク
+function dstr(d){ return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+const DAILY_RW=[50,75,100,150,200,300,500];
+function claimDaily(){ const today=dstr(new Date()); if(SAVE.daily.date===today) return null;
+  const yest=dstr(new Date(Date.now()-86400000));
+  SAVE.daily.streak=(SAVE.daily.date===yest)?(SAVE.daily.streak+1):1; SAVE.daily.date=today;
+  const rw=DAILY_RW[Math.min(SAVE.daily.streak-1,DAILY_RW.length-1)]; SAVE.coins+=rw; save(); return {rw,streak:SAVE.daily.streak}; }
+// オーバーレイ
+const elMenu=document.getElementById('menu'), elMenuCard=document.getElementById('menucard');
+const elDaily=document.getElementById('daily'), elDailyCard=document.getElementById('dailycard');
+const elPause=document.getElementById('pause'), elPauseCard=document.getElementById('pausecard');
+const elPauseBtn=document.getElementById('pausebtn'), elReviveBtn=document.getElementById('reviveBtn');
+function showOv(el){ if(el)el.classList.add('show'); } function hideOv(el){ if(el)el.classList.remove('show'); }
+function rowHTML(ic,nm,ds,extra,btn){ return '<div class="row"><div class="ic">'+ic+'</div><div class="info"><div class="nm">'+nm+'</div><div class="ds">'+ds+'</div>'+(extra||'')+'</div>'+btn+'</div>'; }
+let menuTab='shop';
+function renderMenu(){ ensureMissions();
+  let h='<h2>'+(menuTab==='goals'?'🎯 Goals':menuTab==='skins'?'😎 Characters':'🛒 Shop')+'</h2><div class="bal">🥤 '+(SAVE.coins|0)+' coins</div>';
+  h+='<div class="tabs"><div class="tab '+(menuTab==='shop'?'on':'')+'" data-tab="shop">Upgrades</div><div class="tab '+(menuTab==='skins'?'on':'')+'" data-tab="skins">Characters</div><div class="tab '+(menuTab==='goals'?'on':'')+'" data-tab="goals">Goals</div></div>';
+  if(menuTab==='shop'){ UPGRADES.forEach(u=>{ const lvl=SAVE.up[u.id]||0, cost=upCost(u), maxed=lvl>=u.max, aff=SAVE.coins>=cost;
+    const ex='<div class="lv">Lv '+lvl+' / '+u.max+'</div><div class="barwrap"><i style="width:'+(lvl/u.max*100)+'%"></i></div>';
+    const btn=maxed?'<button disabled>MAX</button>':'<button data-act="up" data-id="'+u.id+'"'+(aff?'':' disabled')+'>🥤'+cost+'</button>';
+    h+=rowHTML(u.ic,u.name,u.desc,ex,btn); }); }
+  else if(menuTab==='skins'){ SKINS.forEach(s=>{ const owned=SAVE.skins.indexOf(s.id)>=0, eq=SAVE.skin===s.id, aff=SAVE.coins>=s.cost;
+    const sw='<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:'+(s.tint==='#ffffff'?'#1a2a5e':s.tint)+';border:2px solid #fff;vertical-align:middle"></span>';
+    let btn= eq?'<button class="eq" disabled>EQUIPPED</button>' : owned?'<button class="owned" data-act="equip" data-id="'+s.id+'">EQUIP</button>' : '<button data-act="buyskin" data-id="'+s.id+'"'+(aff?'':' disabled')+'>🥤'+s.cost+'</button>';
+    h+=rowHTML(sw,s.name,owned?'Owned':'Tap to unlock',null,btn); }); }
+  else { SAVE.miss.forEach(m=>{ const t=MISS_TYPES[m.k], cur=missCur(m), pct=Math.min(100,cur/m.tgt*100), got=cur>=m.tgt;
+    const ex='<div class="barwrap"><i style="width:'+pct+'%"></i></div>';
+    h+=rowHTML(t.ic,t.label(m.tgt),'Reward 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
+  h+='<button class="closebtn" data-act="close">CLOSE</button>'; elMenuCard.innerHTML=h; }
+function openMenu(tab){ menuTab=tab||'shop'; renderMenu(); showOv(elMenu); }
+if(elMenuCard) elMenuCard.addEventListener('click',e=>{ const el=e.target.closest('[data-tab],[data-act]'); if(!el)return;
+  if(el.dataset.tab){ menuTab=el.dataset.tab; renderMenu(); return; }
+  const act=el.dataset.act, id=el.dataset.id;
+  if(act==='close'){ hideOv(elMenu); updateStartBest(); }
+  else if(act==='up'){ const u=UPGRADES.find(x=>x.id===id), cost=upCost(u), lvl=SAVE.up[id]||0; if(lvl<u.max&&SAVE.coins>=cost){ SAVE.coins-=cost; SAVE.up[id]=lvl+1; save(); sfx('up'); renderMenu(); } }
+  else if(act==='buyskin'){ const s=SKINS.find(x=>x.id===id); if(SAVE.coins>=s.cost){ SAVE.coins-=s.cost; SAVE.skins.push(s.id); SAVE.skin=s.id; save(); applySkin(); sfx('up'); renderMenu(); } }
+  else if(act==='equip'){ SAVE.skin=id; save(); applySkin(); sfx('coin'); renderMenu(); } });
+function showDailyPopup(r){ if(!elDailyCard)return; elDailyCard.innerHTML='<h2>Daily Reward</h2><div style="text-align:center"><div class="dailyrw">🎁</div><div class="bal">+'+r.rw+' coins</div><div style="color:#9fb0d8;font-weight:800">🔥 '+r.streak+'-day streak</div><button class="closebtn" data-d="1">CLAIM</button></div>';
+  showOv(elDaily); const b=elDailyCard.querySelector('[data-d]'); if(b)b.onclick=()=>{ hideOv(elDaily); updateStartBest(); sfx('up'); }; }
+// ポーズ＆設定
+function renderPause(){ if(!elPauseCard)return; elPauseCard.innerHTML='<h2>Paused</h2>'
+  +'<div class="setrow">Sound / SFX<div class="toggle '+(bgmOn?'on':'')+'" data-t="snd"><i></i></div></div>'
+  +'<div class="setrow">Vibration<div class="toggle '+(SAVE.hapt?'on':'')+'" data-t="hapt"><i></i></div></div>'
+  +'<button class="closebtn" data-p="resume">RESUME</button>'
+  +'<button class="closebtn" style="background:#39405e;margin-top:8px" data-p="quit">QUIT TO TITLE</button>'; }
+if(elPauseCard) elPauseCard.addEventListener('click',e=>{ const tg=e.target.closest('[data-t]'); if(tg){ if(tg.dataset.t==='snd'){ elBgm.click(); } else { SAVE.hapt=SAVE.hapt?0:1; save(); buzz(20); } renderPause(); return; }
+  const p=e.target.closest('[data-p]'); if(!p)return;
+  if(p.dataset.p==='resume') resumeGame(); else if(p.dataset.p==='quit'){ paused=false; hideOv(elPause); if(elPauseBtn)elPauseBtn.style.display='none'; showTitle(); updateStartBest(); } });
+function pauseGame(){ if(state!=='run'||paused)return; paused=true; renderPause(); showOv(elPause); }
+function resumeGame(){ paused=false; hideOv(elPause); }
+// リバイブ
+const REVIVE_COST=150;
+function canRevive(){ return !reviveUsed && SAVE.coins>=REVIVE_COST; }
+function reviveNow(){ if(reviveUsed||SAVE.coins<REVIVE_COST||state!=='dead')return; SAVE.coins-=REVIVE_COST; reviveUsed=true; save();
+  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0; if(mode==='chase')endChase();
+  hp=Math.max(hp,2); invulnT=2.6; knockT=0; pvx=0; py=0; vy=0; grounded=true; sliding=false; deadT=0;
+  state='run'; if(elOver)elOver.style.display='none'; if(elPauseBtn)elPauseBtn.style.display='flex'; if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;
+  if(chars.main){activeChar=chars.main;chars.main.holder.visible=true;setAnim(chars.main,'Running');chars.main.holder.rotation.z=0;chars.main.holder.position.z=0;}
+  sfx('star'); banner('REVIVE!',1200); buzz(40); }
+// 配線
+if(elToShop=document.getElementById('toShop')) elToShop.addEventListener('pointerdown',e=>{ e.stopPropagation(); openMenu('shop'); });
+if(elToMiss=document.getElementById('toMiss')) elToMiss.addEventListener('pointerdown',e=>{ e.stopPropagation(); openMenu('goals'); });
+if(elPauseBtn) elPauseBtn.addEventListener('click',e=>{ e.stopPropagation(); pauseGame(); });
+if(elReviveBtn) elReviveBtn.addEventListener('click',e=>{ e.stopPropagation(); reviveNow(); });
+ensureMissions(); save();
+(function(){ const r=claimDaily(); if(r) setTimeout(()=>{ if(state==='title')showDailyPopup(r); },600); updateStartBest(); })();
+var elToShop, elToMiss;
+
 function reset(){
   obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
   coins.forEach(c=>scene.remove(c)); coins.length=0;
@@ -839,10 +991,11 @@ function reset(){
   pops.forEach(p=>scene.remove(p.m)); pops.length=0;
   if(pursuer){scene.remove(pursuer); pursuer=null; pursuerKind=null;}
   if(board)board.visible=false;
-  scroll=0; speed=baseSpeed; py=0; vy=0; grounded=true; sliding=false; slideT=0;
+  scroll=(SAVE.up.headstart||0)*90; speed=baseSpeed; py=0; vy=0; grounded=true; sliding=false; slideT=0;   // ヘッドスタートで前進
   score=0; coinCount=0; nextOb=0; nextCoin=-6; powerT=0; deadT=0; gameTime=0;
-  px=0; pvx=0; steerDir=0; invertT=0; rideT=0; dashT=0; dashCD=0; invulnT=0; knockT=0; knockVz=0; hp=HP_MAX; fovKick=0; hitstop=0; slowmo=0;
-  breakCombo(); lastMilestone=0; squashT=0; window.__newBest=false;
+  px=0; pvx=0; steerDir=0; invertT=0; rideT=0; dashT=0; dashCD=0; invulnT=0; knockT=0; knockVz=0; hp=maxHP(); fovKick=0; hitstop=0; slowmo=0;
+  breakCombo(); resetRunStat(); lastMilestone=Math.floor(scroll/500)*500; squashT=0; window.__newBest=false; paused=false; hideOv(elPause);
+  applySkin(); if(elPauseBtn)elPauseBtn.style.display='flex';
   if(chars.main)chars.main.holder.scale.set(1,1,1); if(chars.gold)chars.gold.holder.scale.set(1,1,1);
   mode='run'; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
   // ステージ末ごとに追跡者：各ステージ境界の手前200mで発動。最終ステージ以降は周期。
@@ -864,8 +1017,12 @@ function reset(){
 function restart(){ reset(); }
 function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0.95; slowmo=0.35; sfx('crash'); breakCombo(); buzz(90);
   if(mode==='chase')endChase();
-  // 永続化：プレイ回数・コイン銀行・ハイスコア更新
-  SAVE.plays=(SAVE.plays||0)+1; SAVE.coins=(SAVE.coins||0)+coinCount;
+  if(elPauseBtn)elPauseBtn.style.display='none';
+  // 永続化：プレイ回数(リバイブ時は加算しない)・コイン銀行(差分)・ハイスコア・ミッション
+  if(!reviveUsed) SAVE.plays=(SAVE.plays||0)+1;
+  SAVE.coins=(SAVE.coins||0)+Math.max(0,coinCount-bankedCoins); bankedCoins=coinCount;
+  runStat.dist=Math.max(runStat.dist,scroll|0); runStat.coins=Math.max(runStat.coins,coinCount);
+  window.__missEarned = evalMissions();
   window.__newBest = (score|0)>(SAVE.best||0); if(window.__newBest){ SAVE.best=score|0; } save();
   bgmAudio.volume=BGM_VOL_DEAD;                    // ゲームオーバー中はBGMを小さく
   if(activeChar&&activeChar.ACT['KnockDown']) setAnim(activeChar,'KnockDown'); }
@@ -931,6 +1088,7 @@ function charBox(){
 function frame(now){
   requestAnimationFrame(frame);
   let dt=Math.min(0.033,(now-(frame.last||now))/1000); frame.last=now;
+  if(paused){ renderer.render(scene,camera); return; }                // ポーズ中はワールド停止
   if(hitstop>0){ hitstop--; renderer.render(scene,camera); return; } // 衝撃の一瞬停止
   if(slowmo>0){ slowmo-=dt; dt*=0.4; }                               // クラッシュ直後スロー
   t+=dt;
@@ -952,6 +1110,7 @@ function frame(now){
     speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0)+(rideT>0?7:0)+downhill;
     scroll+=speed*dt;
     score+=speed*dt*1.2;
+    runStat.dist=scroll|0; runStat.coins=coinCount;   // ミッション進捗（ライブ）
     // 500mごとのマイルストーン祝祭（紙吹雪＋ボーナス）
     if(scroll-lastMilestone>=500){ lastMilestone+=500; banner(lastMilestone+'m! 🎉',1300); confetti(); sfx('up'); camShake=Math.max(camShake,0.32);
       const bonus=50; score+=bonus; popText('MILESTONE +'+bonus,'#ffd84a',W()/2,H()*0.4,true); buzz(40); }
@@ -998,8 +1157,10 @@ function frame(now){
   } else if(state==='dead'){
     deadT+=dt;
     if(deadT>1.4 && elOver.style.display!=='flex'){
+      const me=window.__missEarned||0;
       elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 NEW BEST!</span><br>':'')
-        +'Score '+(score|0)+' &nbsp;·&nbsp; Best '+(SAVE.best|0)+'<br><span style="opacity:.85">🥤 +'+coinCount+' &nbsp;·&nbsp; Bank '+(SAVE.coins|0)+'</span>';
+        +'Score '+(score|0)+' &nbsp;·&nbsp; Best '+(SAVE.best|0)+'<br><span style="opacity:.85">🥤 +'+coinCount+(me?' &nbsp;+🎯'+me:'')+' &nbsp;·&nbsp; Bank '+(SAVE.coins|0)+'</span>';
+      if(elReviveBtn){ const rv=canRevive(); elReviveBtn.style.display=rv?'inline-block':'none'; if(rv)elReviveBtn.textContent='REVIVE  🥤'+REVIVE_COST; }
       elOver.style.display='flex'; }
   }
 
@@ -1079,7 +1240,7 @@ function frame(now){
           else { takeHit(); }
         }
       } else if(!ud.span && xo<COLL_X+half+0.7){   // ニアミス：コンボ＋微スロー＋演出
-        addCombo(1); const gain=Math.round(15*mult); score+=gain;
+        addCombo(1); runStat.near++; const gain=Math.round(15*mult); score+=gain;
         slowmo=Math.max(slowmo,0.1); camShake=Math.max(camShake,0.16); fovKick=Math.max(fovKick,4); sfx('near');
         const s=toScreen(o.position); popText('NICE +'+gain,'#9fe8ff',s.x,s.y-10); }
     }
