@@ -640,7 +640,7 @@ const FOV_BASE=48; let fovKick=0;
 let hitstop=0, slowmo=0;
 let mode='run', nextChaseAt=600, chaseEnd=0, chaseGap=1, pursuer=null, pursuerKind=null; // チェイス演出
 let chasePlan=[];                  // ステージ末ごとの追跡イベント発動位置
-let skatePlan=[];                  // スケボー区間の発動位置
+let nextSkateAt=0;                 // 次のスケボー区間の発動位置（周期的に再出現）
 let lastSection=0;                 // 区間（難易度段階）
 const decos=[]; let nextDeco=0;    // ステージ別テーマ装飾（高架・橋・クレーン・ネオン等）
 // ===== カーブ（疑似スプライン：zに応じて全スクロール物のxをずらす）=====
@@ -736,7 +736,8 @@ function makeBoard(){ const g=new THREE.Group();
   [[-0.2,-0.62],[0.2,-0.62],[-0.2,0.62],[0.2,0.62]].forEach(([x,z])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.1,12),wm); w.rotation.z=Math.PI/2; w.position.set(x,0.12,z); g.add(w);});
   g.visible=false; scene.add(g); return g; }
 function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
-  rideT=6.5; if(!board)board=makeBoard(); board.visible=true;
+  rideT=11; nextSkateAt = scroll + 760 + Math.random()*320;   // 滞在を長く＋次の区間を予約（周期出現）
+  if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
   banner('🛹 Skateboard! Bomb down the hill (heavy steering)',2200); }
 function doDash(){ if(state!=='run'||dashCD>0||dashT>0)return;
@@ -790,7 +791,7 @@ function reset(){
   // ステージ末ごとに追跡者：各ステージ境界の手前200mで発動。最終ステージ以降は周期。
   chasePlan=[]; for(let i=1;i<STAGES.length;i++) chasePlan.push(STAGES[i].from-200);
   nextChaseAt=STAGES[STAGES.length-1].from+520;
-  skatePlan=[ 740+Math.random()*180, 1480+Math.random()*260 ];   // 高速・橋あたりで下り爆走
+  nextSkateAt = 540 + Math.random()*160;   // 最初のスケボー区間（以降は周期的に再出現）
   curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null;
   scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
   atkPhase='idle'; atkT=0; if(warnMesh)warnMesh.visible=false;
@@ -908,7 +909,7 @@ function frame(now){
     }
     if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0; }
     // スケボー区間の発動（高速・橋あたりの下り爆走）
-    if(mode==='run' && rideT<=0 && skatePlan.length && scroll>skatePlan[0]){ skatePlan.shift(); startSkate(); }
+    if(mode==='run' && rideT<=0 && scroll>nextSkateAt){ startSkate(); }
     // チェイス開始（ステージ末ごとに別の巨大追跡者／最終以降は周期）・進行・終了
     if(mode==='run' && chasePlan.length && scroll>chasePlan[0]){ chasePlan.shift(); startChase(); }
     else if(mode==='run' && !chasePlan.length && scroll>nextChaseAt){ startChase(); }
