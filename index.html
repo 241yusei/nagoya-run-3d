@@ -70,6 +70,23 @@
     color:#e7ecf5;text-shadow:0 2px 6px rgba(0,0,0,.6)}
   #starttip{margin-top:16px;font-size:12px;color:#cdd6e6;text-shadow:0 2px 6px rgba(0,0,0,.6)}
   @media (max-width:520px){ #logo{font-size:34px} #logo3d{font-size:20px} #startbtn{font-size:22px;padding:15px 48px} }
+  /* ===== ジュース演出（フローティング数字・紙吹雪・コンボ）===== */
+  #fx{position:fixed;inset:0;pointer-events:none;z-index:40;overflow:hidden}
+  .pt{position:absolute;transform:translate(-50%,-50%);font-weight:900;font-size:22px;
+    text-shadow:0 2px 6px rgba(0,0,0,.55);animation:ptpop .78s ease-out forwards;white-space:nowrap}
+  .pt.big{font-size:34px}
+  @keyframes ptpop{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}
+    18%{transform:translate(-50%,-62%) scale(1.18);opacity:1}
+    100%{transform:translate(-50%,-160%) scale(1);opacity:0}}
+  .conf{position:absolute;top:-22px;width:9px;height:14px;border-radius:2px;animation:conff 1.4s ease-in forwards}
+  @keyframes conff{0%{transform:translateY(0) translateX(0) rotate(0);opacity:1}
+    100%{transform:translateY(108vh) translateX(var(--dx)) rotate(720deg);opacity:.7}}
+  #combo{position:fixed;top:102px;left:50%;transform:translateX(-50%);z-index:35;pointer-events:none;
+    font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.6);text-align:center;opacity:0;transition:opacity .18s}
+  #combo b{font-size:30px;color:#ffd84a;display:block;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.7)}
+  #combo span{font-size:12px;letter-spacing:2px;font-weight:800}
+  #startbest{margin-top:14px;font-size:15px;font-weight:800;color:#ffd84a;text-shadow:0 2px 8px rgba(0,0,0,.6);min-height:18px}
+  #over h1{animation:bpop .4s ease-out}
 </style>
 </head>
 <body>
@@ -84,6 +101,8 @@
 <div id="hint" class="ui">← → Hold ／ Hold left-right of screen = Move ・ ↑ Swipe up = Jump ・ ↓ Swipe down = Slide ・ Shift／Double-tap = Dash</div>
 <div id="gapwrap" class="ui"><div id="gapbar"></div></div>
 <div id="vig"></div>
+<div id="fx"></div>
+<div id="combo"><b id="combomult">x1</b><span id="combocnt">COMBO</span></div>
 <div id="banner"></div>
 <div id="over"><h1>GAME OVER</h1><p id="ovs"></p><button id="retry">RETRY</button></div>
 <div id="start"><div id="startinner">
@@ -96,6 +115,7 @@
     <span>Slide: ↓ ／ Swipe down　・　Dash: Shift ／ Double-tap</span>
   </div>
   <div id="starttip">🥤 Grab coins, dodge, and run ／ A giant boss chases you every stage</div>
+  <div id="startbest"></div>
 </div></div>
 <script src="libs/three.min.js"></script>
 <script src="libs/GLTFLoader.js"></script>
@@ -714,19 +734,19 @@ function exitStarMusic(){ if(!starMusicOn)return; starMusicOn=false; starAudio.p
 
 // ===== 効果音（WebAudio合成・ファイル不要）=====
 let actx=null;
-function sfx(name){ if(!bgmOn)return; try{   // ミュート中(🔇)は効果音も鳴らさない
+function sfx(name,rate){ if(!bgmOn)return; try{   // ミュート中(🔇)は効果音も鳴らさない。rate=ピッチ倍率（コンボで上昇）
   if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
   if(actx.state==='suspended') actx.resume();
   const P={ jump:[520,900,0.16,'square',0.16], slide:[320,130,0.22,'sawtooth',0.15], dash:[200,1300,0.22,'sawtooth',0.18],
     coin:[950,1600,0.08,'square',0.14], hit:[180,55,0.26,'square',0.28], crash:[420,40,0.5,'sawtooth',0.3],
     near:[1300,420,0.1,'sine',0.1], up:[600,1250,0.26,'triangle',0.18], chase:[150,150,0.3,'square',0.22], star:[700,1500,0.3,'triangle',0.18] }[name];
-  if(!P)return; const now=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
+  if(!P)return; const r=rate||1, now=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
   const[f0,f1,dur,type,vol]=P; o.type=type; o.connect(g); g.connect(actx.destination);
-  o.frequency.setValueAtTime(f0,now); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),now+dur);
+  o.frequency.setValueAtTime(f0*r,now); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1*r),now+dur);
   g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
   o.start(now); o.stop(now+dur+0.02);
 }catch(e){} }
-function doJump(){ if(state==='run'&&grounded){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; sfx('jump');} }
+function doJump(){ if(state==='run'&&grounded){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; squashT=0.16; squashKind=1; sfx('jump'); buzz(12);} }
 function doSlide(){ if(state==='run'&&grounded){sliding=true;slideT=0.62; sfx('slide');} }
 function setSteer(d){ if(state!=='run'){steerDir=0;return;} steerDir=d; }   // 反転は積分時に適用（押し続け中も即反映）
 // スケートボード（下り爆走ライド用）
@@ -776,6 +796,41 @@ if(elStart){ elStart.addEventListener('pointerdown',e=>{ e.stopPropagation(); st
 addEventListener('keydown',e=>{ if(state==='title'&&(e.code==='Enter'||e.code==='Space')){ e.preventDefault(); startGame(); } });
 showTitle();   // 初期表示
 
+// ===== セーブ＆メタ（localStorage：ハイスコア・コイン銀行・設定の永続化）=====
+const SAVE_KEY='nagoyaRun3D_v1';
+function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||{}; }catch(e){ return {}; } }
+const SAVE=Object.assign({ best:0, coins:0, plays:0, skin:'default', skins:['default'],
+  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1 }, loadSave());
+if(!SAVE.up) SAVE.up={magnet:0,coinval:0,headstart:0,shield:0};
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){} }
+function buzz(ms){ if(SAVE.hapt && navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
+window.__newBest=false;
+const elBest=document.getElementById('startbest');
+function updateStartBest(){ if(elBest) elBest.textContent=(SAVE.best>0||SAVE.coins>0)?('BEST '+(SAVE.best|0)+'   ·   🥤 '+(SAVE.coins|0)):''; }
+updateStartBest();
+
+// ===== コンボ（連続取得・回避でスコア倍率UP。被弾でリセット）=====
+let combo=0, comboT=0, mult=1, lastMilestone=0;
+function addCombo(n){ combo+=(n||1); comboT=2.4; mult=Math.min(8, 1+Math.floor(combo/4)*0.5); }
+function breakCombo(){ combo=0; comboT=0; mult=1; }
+
+// ===== フローティングテキスト（スクリーン空間の +N / COMBO / NICE）＆紙吹雪 =====
+const elFx=document.getElementById('fx');
+const elCombo=document.getElementById('combo'), elComboMult=document.getElementById('combomult'), elComboCnt=document.getElementById('combocnt');
+function toScreen(v){ const p=v.clone().project(camera); return {x:(p.x*0.5+0.5)*W(), y:(-p.y*0.5+0.5)*H()}; }
+function popText(text,color,sx,sy,big){ if(!elFx)return; const d=document.createElement('div'); d.className='pt'+(big?' big':'');
+  d.textContent=text; d.style.color=color||'#fff'; d.style.left=sx+'px'; d.style.top=sy+'px'; elFx.appendChild(d);
+  setTimeout(()=>{ if(d.parentNode)d.remove(); }, 800); }
+function popWorld(v,text,color,big){ const s=toScreen(v); popText(text,color,s.x,s.y,big); }
+function confetti(){ if(!elFx)return; const cols=['#ffd84a','#e8362e','#4fd0ff','#5ff0b0','#ff8ad0','#fff'];
+  for(let i=0;i<26;i++){ const d=document.createElement('div'); d.className='conf';
+    d.style.left=(15+Math.random()*70)+'%'; d.style.background=cols[(Math.random()*cols.length)|0];
+    d.style.setProperty('--dx',((Math.random()-0.5)*40)+'vw'); d.style.animationDelay=(Math.random()*0.15)+'s';
+    elFx.appendChild(d); setTimeout(()=>{ if(d.parentNode)d.remove(); },1600); } }
+
+// ===== スカッシュ＆ストレッチ（ジャンプ/着地のプニッと感）=====
+let squashT=0, squashKind=0;   // kind:1=ストレッチ(跳躍) / -1=スクワッシュ(着地)
+
 function reset(){
   obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
   coins.forEach(c=>scene.remove(c)); coins.length=0;
@@ -787,6 +842,8 @@ function reset(){
   scroll=0; speed=baseSpeed; py=0; vy=0; grounded=true; sliding=false; slideT=0;
   score=0; coinCount=0; nextOb=0; nextCoin=-6; powerT=0; deadT=0; gameTime=0;
   px=0; pvx=0; steerDir=0; invertT=0; rideT=0; dashT=0; dashCD=0; invulnT=0; knockT=0; knockVz=0; hp=HP_MAX; fovKick=0; hitstop=0; slowmo=0;
+  breakCombo(); lastMilestone=0; squashT=0; window.__newBest=false;
+  if(chars.main)chars.main.holder.scale.set(1,1,1); if(chars.gold)chars.gold.holder.scale.set(1,1,1);
   mode='run'; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
   // ステージ末ごとに追跡者：各ステージ境界の手前200mで発動。最終ステージ以降は周期。
   chasePlan=[]; for(let i=1;i<STAGES.length;i++) chasePlan.push(STAGES[i].from-200);
@@ -805,18 +862,21 @@ function reset(){
   if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;   // BGM音量を通常に戻す
 }
 function restart(){ reset(); }
-function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0.6; slowmo=0.35; sfx('crash');
+function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0.95; slowmo=0.35; sfx('crash'); breakCombo(); buzz(90);
   if(mode==='chase')endChase();
+  // 永続化：プレイ回数・コイン銀行・ハイスコア更新
+  SAVE.plays=(SAVE.plays||0)+1; SAVE.coins=(SAVE.coins||0)+coinCount;
+  window.__newBest = (score|0)>(SAVE.best||0); if(window.__newBest){ SAVE.best=score|0; } save();
   bgmAudio.volume=BGM_VOL_DEAD;                    // ゲームオーバー中はBGMを小さく
   if(activeChar&&activeChar.ACT['KnockDown']) setAnim(activeChar,'KnockDown'); }
 // 障害物を吹っ飛ばす（無敵スマッシュ／ダッシュ破壊で共用）
 function smash(o){ const ud=o.userData; ud.smashed=true; ud.vx=(Math.random()-0.5)*7; ud.vy=11+Math.random()*5; ud.vz=7; ud.spin=(Math.random()-0.5)*16; }
 // 被弾（HP-1＋後方ノックバック＋ヒットストップ）。無敵中は無効
-function takeHit(){ if(invulnT>0||powerT>0||dashT>0)return; hp--; invulnT=1.1; knockT=0.5; camShake=0.5; fovKick=Math.max(fovKick,8); hitstop=2; pvx*=0.3; sfx('hit');
+function takeHit(){ if(invulnT>0||powerT>0||dashT>0)return; hp--; invulnT=1.1; knockT=0.5; camShake=0.55; fovKick=Math.max(fovKick,8); hitstop=3; pvx*=0.3; sfx('hit'); breakCombo(); buzz(45);
   if(mode==='chase') chaseGap=Math.max(0, chaseGap-0.3);
   if(hp<=0) gameOver(); }
 // 即死（穴・正面衝突など）：HP無視で一発アウト
-function takeHitHard(){ if(powerT>0||dashT>0||invulnT>0)return; hp=0; camShake=0.7; hitstop=2; gameOver(); }
+function takeHitHard(){ if(powerT>0||dashT>0||invulnT>0)return; hp=0; camShake=0.8; hitstop=4; breakCombo(); buzz(70); gameOver(); }
 // 取得演出（拡大して消える小球）
 function spawnPop(x,y,col){ const m=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),
   new THREE.MeshBasicMaterial({color:col||'#ffe04a',transparent:true,depthWrite:false}));
@@ -892,12 +952,16 @@ function frame(now){
     speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0)+(rideT>0?7:0)+downhill;
     scroll+=speed*dt;
     score+=speed*dt*1.2;
-    // ジャンプ物理
-    if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true;}}
+    // 500mごとのマイルストーン祝祭（紙吹雪＋ボーナス）
+    if(scroll-lastMilestone>=500){ lastMilestone+=500; banner(lastMilestone+'m! 🎉',1300); confetti(); sfx('up'); camShake=Math.max(camShake,0.32);
+      const bonus=50; score+=bonus; popText('MILESTONE +'+bonus,'#ffd84a',W()/2,H()*0.4,true); buzz(40); }
+    // ジャンプ物理（着地でスクワッシュ）
+    if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true; squashT=0.16; squashKind=-1; if(rideT<=0)buzz(10);}}
     if(sliding){slideT-=dt; if(slideT<=0)sliding=false;}
     // 各種タイマー
     if(dashT>0)dashT-=dt; if(dashCD>0)dashCD-=dt; if(invulnT>0)invulnT-=dt;
     if(invertT>0)invertT-=dt;
+    if(comboT>0){ comboT-=dt; if(comboT<=0) breakCombo(); }   // コンボ時間切れでリセット
     if(rideT>0){ rideT-=dt; if(rideT<=0){ rideT=0; if(board)board.visible=false; banner('🛹 Landed!',1200); } }
     if(knockT>0)knockT-=dt; if(fovKick>0)fovKick-=fovKick*Math.min(1,dt*6);
     // 通常時のみ障害物・コイン・スターをスポーン（チェイス中は金鯱だけ）
@@ -934,7 +998,9 @@ function frame(now){
   } else if(state==='dead'){
     deadT+=dt;
     if(deadT>1.4 && elOver.style.display!=='flex'){
-      elOvs.textContent='Score '+(score|0)+' ・ Coins '+coinCount; elOver.style.display='flex'; }
+      elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 NEW BEST!</span><br>':'')
+        +'Score '+(score|0)+' &nbsp;·&nbsp; Best '+(SAVE.best|0)+'<br><span style="opacity:.85">🥤 +'+coinCount+' &nbsp;·&nbsp; Bank '+(SAVE.coins|0)+'</span>';
+      elOver.style.display='flex'; }
   }
 
   // キャラ切替（パワーアップ中＝金スター、通常＝名古屋人間）
@@ -969,6 +1035,11 @@ function frame(now){
     ch.holder.position.z = (state==='run'&&knockT>0) ? Math.sin(knockT/0.5*Math.PI)*1.4 : 0; // 後方ノックバック
     ch.holder.rotation.z = state==='dead'?0:-pvx*0.045;                                       // 横速度で傾く
     ch.holder.visible = (state==='run'&&invulnT>0&&powerT<=0) ? (Math.sin(t*40)>0) : true; // 被弾点滅
+    // スカッシュ＆ストレッチ（着地/跳躍のプニッと感。体積をほぼ保つ）
+    if(squashT>0 && state==='run'){ squashT-=dt; const k=Math.max(0,squashT/0.16);
+      if(squashKind>0) ch.holder.scale.set(1-0.08*k,1+0.16*k,1-0.08*k);   // 跳躍＝縦伸び
+      else ch.holder.scale.set(1+0.14*k,1-0.20*k,1+0.14*k); }             // 着地＝つぶれ
+    else if(ch.holder.scale.y!==1) ch.holder.scale.set(1,1,1);
   }
   blob.position.x=px;
   blob.material.opacity=0.55*(1-Math.min(py/4,0.75));
@@ -1007,17 +1078,28 @@ function frame(now){
           else if(ud.gag==='invert' && dashT<=0){ invertT=5; banner('🔄 Trash can hit! Controls reversed',1700); camShake=0.32; fovKick=Math.max(fovKick,6); spawnPop(o.position.x,1.0,'#7ad0a0'); sfx('hit'); } // ゴミ箱＝操作反転ギャグ（被弾なし）
           else { takeHit(); }
         }
-      } else if(!ud.span && xo<COLL_X+half+0.7){ score+=10; sfx('near'); }  // ニアミス・ボーナス
+      } else if(!ud.span && xo<COLL_X+half+0.7){   // ニアミス：コンボ＋微スロー＋演出
+        addCombo(1); const gain=Math.round(15*mult); score+=gain;
+        slowmo=Math.max(slowmo,0.1); camShake=Math.max(camShake,0.16); fovKick=Math.max(fovKick,4); sfx('near');
+        const s=toScreen(o.position); popText('NICE +'+gain,'#9fe8ff',s.x,s.y-10); }
     }
     if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
   }
   // コイン（光る金貨）：レーンが合っていれば取得。25個で1UP
+  const magR=1.8+(SAVE.up.magnet||0)*1.5;   // コインマグネット（基本1.8＋ショップ強化）
   for(let i=coins.length-1;i>=0;i--){const c=coins[i];
     c.position.z+=ws*dt; c.userData.spin.rotation.y+=dt*5; curveMove(c);   // カーブ/勾配
-    if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.1){
+    if(c.userData.alive && c.position.z>-magR-1 && c.position.z<1.6 && Math.abs(px-c.position.x)<magR){ c.position.x += (px-c.position.x)*Math.min(1,dt*7); }  // 引き寄せ
+    if(c.userData.alive && Math.abs(c.position.z)<0.8 && Math.abs(px-c.position.x)<1.15){
       const cy=c.position.y; if(cy>cb.bottom-0.4 && cy<cb.top+0.4){
-        c.userData.alive=false; coinCount++; score+=20; spawnPop(c.position.x,c.position.y,'#ffd84a'); sfx('coin');
-        if(coinCount%25===0 && hp<HP_MAX){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); }
+        c.userData.alive=false; addCombo(1);
+        const gain=Math.round(20*(1+(SAVE.up.coinval||0)*0.25)*mult);   // コンボ倍率＋コイン価値強化
+        coinCount++; score+=gain;
+        const s=toScreen(c.position); popText('+'+gain,'#ffd84a',s.x,s.y);
+        for(let q=0;q<5;q++)spawnPop(c.position.x+(Math.random()-0.5)*0.5,c.position.y+(Math.random()-0.5)*0.5,'#ffe88a');
+        camShake=Math.max(camShake,0.09); sfx('coin', 1+Math.min(combo,14)*0.05);
+        if(combo>1 && combo%5===0){ popText(combo+' COMBO!','#ffd84a',s.x,s.y-34,true); sfx('up',1.2); }
+        if(coinCount%25===0 && hp<HP_MAX){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); buzz(30); }
         scene.remove(c); coins.splice(i,1); continue; }
     }
     if(c.position.z>12){scene.remove(c); coins.splice(i,1);}
@@ -1028,7 +1110,7 @@ function frame(now){
     e.userData.glow.lookAt(camera.position); curveMove(e);   // カーブ/勾配
     if(e.userData.alive && Math.abs(e.position.z)<0.95 && Math.abs(px-e.position.x)<1.1){
       const ey=e.position.y; if(ey>cb.bottom-0.6 && ey<cb.top+0.7){
-        e.userData.alive=false; powerT=20; score+=100; camShake=0.3; spawnPop(e.position.x,e.position.y,'#5ff0b0'); sfx('star'); scene.remove(e); emeralds.splice(i,1); continue; }
+        e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'STAR POWER!','#5ff0b0',true); confetti(); sfx('star'); buzz(40); scene.remove(e); emeralds.splice(i,1); continue; }
     }
     if(e.position.z>12){scene.remove(e); emeralds.splice(i,1);}
   }
@@ -1063,14 +1145,18 @@ function frame(now){
   const lBx=px*0.35,lBy=1.2+py*0.25,lBz=-16, lCx=px*0.3,lCy=3.0+py*0.2,lCz=9;
   const lx=lBx+(lCx-lBx)*chaseCam, ly=lBy+(lCy-lBy)*chaseCam, lz=lBz+(lCz-lBz)*chaseCam;
   camBaseX += (cx-camBaseX)*(1-Math.exp(-6*dt));                          // x はイージング（揺れを含めない）
-  const shx=camShake?(Math.random()-0.5)*camShake:0, shy=camShake?(Math.random()-0.5)*camShake:0;
+  // トラウマ式スクリーンシェイク（trauma²＋連続擬似ノイズ。生randomよりリッチで滑らか）
+  const tr=Math.min(1,camShake), sh=tr*tr;
+  const nz=(a,b)=>Math.sin(t*a)*0.62+Math.sin(t*b)*0.38;
+  const shx=sh*1.05*nz(47.3,30.1), shy=sh*0.85*nz(53.7,28.9), shRoll=sh*0.13*nz(41.7,22.3);
   const nrm=1-chaseCam;                                                   // 通常時のみカーブ/勾配をカメラへ
   const aheadX=curveOffsetX(-16)*nrm, aheadY=groundY(-16)*0.5*nrm;
   camera.position.set(camBaseX+shx+curveOffsetX(cz)*0.2*nrm, cy+shy, cz);
   camera.lookAt(lx+aheadX, ly+aheadY, lz);
-  camera.rotation.z += THREE.MathUtils.clamp(-curveK*55,-0.12,0.12)*nrm;  // カーブでバンク
-  camera.fov=FOV_BASE+fovKick+chaseCam*5; camera.updateProjectionMatrix();
-  if(camShake>0)camShake-=dt*1.6;
+  camera.rotation.z += THREE.MathUtils.clamp(-curveK*55,-0.12,0.12)*nrm + shRoll;  // カーブバンク＋衝撃ロール
+  const spdFov=Math.min(13,Math.max(0,(speed-11))*0.55);                  // 速いほど画角を広げ疾走感
+  camera.fov=FOV_BASE+fovKick+chaseCam*5+spdFov; camera.updateProjectionMatrix();
+  if(camShake>0)camShake-=dt*1.7;
   // 追跡者（金鯱）：チェイス中、背後(+z)からgapに応じて迫る
   if(pursuer && pursuer.visible){
     // 本体を動かす：予告で仰け反り→噛みつき/突進で前へ→戻る。lift=接地系(トラック)は浮きを抑える
@@ -1101,6 +1187,7 @@ function frame(now){
 
   // HUD
   elSc.textContent=score|0; elCn.textContent=coinCount;
+  if(elCombo){ if(combo>1 && state==='run'){ elCombo.style.opacity='1'; elComboMult.textContent='x'+mult.toFixed(1); elComboCnt.textContent=combo+' COMBO'; } else elCombo.style.opacity='0'; }
   if(elHp) elHp.textContent='❤️'.repeat(Math.max(0,hp))+'🖤'.repeat(Math.max(0,HP_MAX-hp));
   elDist.textContent = powerT>0 ? ('⭐ STAR POWER '+Math.ceil(powerT)+'s')
     : rideT>0 ? ('🛹 BOMBING '+Math.ceil(rideT)+'s')
@@ -1131,6 +1218,8 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
   spawnOb(){spawnObstacle();}, spawnPat(){spawnPattern();}, spawnCoins(z){spawnCoins(z==null?SPZ-6:z);}, kill(){gameOver();}, setScroll(v){scroll=v;},
   setFootLift(v){FOOT_LIFT=v;}, get footLift(){return FOOT_LIFT;},
   setCurve(k){curveK=k;curveTargetK=k;}, setSlope(k){slopeK=k;slopeTargetK=k;}, get curveK(){return curveK;},
+  get combo(){return combo;}, get mult(){return mult;}, get save(){return SAVE;},
+  juiceTest(){ addCombo(6); for(let q=0;q<7;q++)popText('+'+((20*mult)|0),'#ffd84a',W()/2+(Math.random()-0.5)*160,H()/2+(Math.random()-0.5)*100); popText(combo+' COMBO!','#ffd84a',W()/2,H()/2-70,true); confetti(); return {combo,mult}; },
   skate(){startSkate();}, get rideT(){return rideT;}, invert(s){invertT=s==null?5:s;}, get invertT(){return invertT;},
   chase(kind){startChase(kind);}, get pursuerKind(){return pursuerKind;},
   wave(i){spawnWave(WAVES[i==null?0:i]);}, deco(name){const st=STAGES.find(s=>s.n===name)||curStage(); spawnDeco(st); return decos.length;},
