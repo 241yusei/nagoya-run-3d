@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Nagoya Ningen RUN 3D</title>
+<title>ナゴヤ人間RUN 3D</title>
 <style>
   html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e1018;
     font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;-webkit-user-select:none;user-select:none;}
@@ -129,35 +129,35 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud">
-  <div id="avatar"><img src="ui/hero_head.png" alt="Nagoya Ningen"><div id="hp">❤️❤️❤️</div></div>
-  <div id="scorebox">SCORE<b id="sc">0</b><span id="dist"></span></div>
+  <div id="avatar"><img src="ui/hero_head.png" alt="ナゴヤ人間"><div id="hp">❤️❤️❤️</div></div>
+  <div id="scorebox">スコア<b id="sc">0</b><span id="dist"></span></div>
   <div id="prog"><span class="se">S</span><div id="progbar"><div id="progfill"></div><img id="progrun" src="ui/hero_full.png"></div><span class="se">G</span><div id="timer">0:00</div></div>
   <div id="cans">🥤<b id="cn">0</b></div>
 </div>
 <div id="bgm" class="ui" style="top:64px;right:18px;font-size:24px;pointer-events:auto;cursor:pointer" title="BGM ON/OFF">🔊</div>
-<div id="hint" class="ui">← → Hold ／ Hold left-right of screen = Move ・ ↑ Swipe up = Jump ・ ↓ Swipe down = Slide ・ Shift／Double-tap = Dash</div>
+<div id="hint" class="ui">← → 長押し／画面の左右を長押し＝移動 ・ ↑ 上スワイプ＝ジャンプ ・ ↓ 下スワイプ＝スライド ・ Shift／ダブルタップ＝ダッシュ</div>
 <div id="gapwrap" class="ui"><div id="gapbar"></div></div>
 <div id="vig"></div>
 <div id="fx"></div>
-<div id="combo"><b id="combomult">x1</b><span id="combocnt">COMBO</span></div>
+<div id="combo"><b id="combomult">x1</b><span id="combocnt">コンボ</span></div>
 <div id="banner"></div>
 <div id="pausebtn" title="Pause">⏸</div>
-<div id="over"><h1>GAME OVER</h1><p id="ovs"></p><button id="reviveBtn">REVIVE</button><button id="retry">RETRY</button></div>
+<div id="over"><h1>ゲームオーバー</h1><p id="ovs"></p><button id="reviveBtn">復活</button><button id="retry">リトライ</button></div>
 <div id="menu" class="ov"><div class="card" id="menucard"></div></div>
 <div id="daily" class="ov"><div class="card" id="dailycard"></div></div>
 <div id="pause" class="ov"><div class="card" id="pausecard"></div></div>
 <div id="start"><div id="startinner">
   <div id="logo"><span class="ln1">Nagoya</span><span class="ln2">NINGEN</span><span class="ln3">RUN</span></div>
   <div id="logo3d">3D</div>
-  <div id="tagline">Dash through the streets of Nagoya!</div>
-  <button id="startbtn">▶ START</button>
+  <div id="tagline">名古屋の街を駆け抜けろ！</div>
+  <button id="startbtn">▶ スタート</button>
   <div id="startctrl">
-    <span>Move: ← → ／ Hold left-right of screen　・　Jump: ↑ ／ Swipe up</span>
-    <span>Slide: ↓ ／ Swipe down　・　Dash: Shift ／ Double-tap</span>
+    <span>移動：← → ／ 画面の左右を長押し　・　ジャンプ：↑ ／ 上スワイプ</span>
+    <span>スライド：↓ ／ 下スワイプ　・　ダッシュ：Shift ／ ダブルタップ</span>
   </div>
-  <div id="starttip">🥤 Grab coins, dodge, and run ／ A giant boss chases you every stage</div>
+  <div id="starttip">🥤 コインを集めて避けて走れ ／ ステージごとに巨大ボスが追ってくる</div>
   <div id="startbest"></div>
-  <div class="menubtns"><button class="mbtn" id="toShop">🛒 SHOP</button><button class="mbtn" id="toMiss">🎯 GOALS</button></div>
+  <div class="menubtns"><button class="mbtn" id="toShop">🛒 ショップ</button><button class="mbtn" id="toMiss">🎯 ミッション</button></div>
 </div></div>
 <script src="libs/three.min.js"></script>
 <script src="libs/GLTFLoader.js"></script>
@@ -718,21 +718,21 @@ function curveMove(o){ const u=o.userData;
   o.position.y=u.baseY+groundY(o.position.z)+(u.hopY||0); }
 // ===== ステージ（街→高速→川/橋→工事→栄。空・霧・速度・カーブ感が変わる）=====
 const STAGES=[
-  {n:'NAGOYA TOWN',      from:0,    sky:'#8fcdf0', fog:'#d4ecf7', spd:11, cAmp:0.006, sAmp:0.03},
-  {n:'NAGOYA EXPRESSWAY',from:520,  sky:'#a8c6e2', fog:'#cfdcea', spd:13, cAmp:0.011, sAmp:0.07},
-  {n:'HORIKAWA BRIDGE',  from:1080, sky:'#9fd6e2', fog:'#cfeef2', spd:14, cAmp:0.009, sAmp:0.04},
-  {n:'CONSTRUCTION SITE',from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
-  {n:'SAKAE NIGHT',      from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
+  {n:'ナゴヤの街',  from:0,    sky:'#8fcdf0', fog:'#d4ecf7', spd:11, cAmp:0.006, sAmp:0.03},
+  {n:'名古屋高速',  from:520,  sky:'#a8c6e2', fog:'#cfdcea', spd:13, cAmp:0.011, sAmp:0.07},
+  {n:'堀川・橋',    from:1080, sky:'#9fd6e2', fog:'#cfeef2', spd:14, cAmp:0.009, sAmp:0.04},
+  {n:'工事現場',    from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
+  {n:'栄の夜',      from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
 ];
 function curStage(){ for(let i=STAGES.length-1;i>=0;i--) if(scroll>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
 let lastStage=null;
 // ===== ステージ別テーマ装飾（Meshy）：沿道の景色をステージごとに差し替える =====
 // f=モデル名 / h=高さ / x=道路中心からの距離 / y=設置高 / both=左右両側 / over=道路上空にアーチ
 const THEME={
-  'NAGOYA EXPRESSWAY':{ gap:15, place:[ {f:'guardrail',h:1.2,x:5.2,both:true}, {f:'ex_pillar',h:9.5,x:11.5,both:true} ] },
-  'HORIKAWA BRIDGE':  { gap:18, place:[ {f:'truss',h:7.5,x:0,y:3.4,over:true} ] },
-  'CONSTRUCTION SITE':{ gap:13, place:[ {f:'barricade',h:1.1,x:5.0,both:true}, {f:'crane',h:15,x:13.5,both:true} ] },
-  'SAKAE NIGHT':      { gap:10, place:[ {f:'neon',h:5.2,x:6.4,both:true}, {f:'crowd',h:1.7,x:5.0,both:true} ] },
+  '名古屋高速':{ gap:15, place:[ {f:'guardrail',h:1.2,x:5.2,both:true}, {f:'ex_pillar',h:9.5,x:11.5,both:true} ] },
+  '堀川・橋':  { gap:18, place:[ {f:'truss',h:7.5,x:0,y:3.4,over:true} ] },
+  '工事現場':  { gap:13, place:[ {f:'barricade',h:1.1,x:5.0,both:true}, {f:'crane',h:15,x:13.5,both:true} ] },
+  '栄の夜':    { gap:10, place:[ {f:'neon',h:5.2,x:6.4,both:true}, {f:'crowd',h:1.7,x:5.0,both:true} ] },
 };
 function spawnDeco(st){ const cfg=THEME[st.n]; if(!cfg)return;
   cfg.place.forEach(it=>{ const sides=it.over?[0]:(it.both?[-1,1]:[it.side||1]);
@@ -801,7 +801,7 @@ function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
   rideT=11; nextSkateAt = scroll + 760 + Math.random()*320;   // 滞在を長く＋次の区間を予約（周期出現）
   if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
-  banner('🛹 Skateboard! Bomb down the hill (heavy steering)',2200); }
+  banner('🛹 スケボー！下り坂を爆走（操作が重い）',2200); }
 function doDash(){ if(state!=='run'||paused||dashCD>0||dashT>0)return;
   dashT=DASH_DUR; dashCD=DASH_CD; invulnT=Math.max(invulnT,DASH_DUR);
   fovKick=Math.max(fovKick,18); camShake=Math.max(camShake,0.18); sfx('dash'); buzz(15); }
@@ -848,7 +848,7 @@ function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }cat
 function buzz(ms){ if(SAVE.hapt && navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
 window.__newBest=false;
 const elBest=document.getElementById('startbest');
-function updateStartBest(){ if(elBest) elBest.textContent=(SAVE.best>0||SAVE.coins>0)?('BEST '+(SAVE.best|0)+'   ·   🥤 '+(SAVE.coins|0)):''; }
+function updateStartBest(){ if(elBest) elBest.textContent=(SAVE.best>0||SAVE.coins>0)?('ベスト '+(SAVE.best|0)+'   ·   🥤 '+(SAVE.coins|0)):''; }
 updateStartBest();
 
 // ===== コンボ（連続取得・回避でスコア倍率UP。被弾でリセット）=====
@@ -878,18 +878,18 @@ let runStat={dist:0,coins:0,near:0,multmax:0,jump:0}, bankedCoins=0, reviveUsed=
 function resetRunStat(){ runStat={dist:0,coins:0,near:0,multmax:0,jump:0}; bankedCoins=0; reviveUsed=false; }
 // 着せ替え（1マテリアル＝テクスチャ着色を全身ティントで変化）
 const SKINS=[
-  {id:'default',name:'Nagoya Ningen',cost:0,tint:'#ffffff'},
-  {id:'gold',   name:'Gold Hero',    cost:600,tint:'#ffd24a'},
-  {id:'shadow', name:'Shadow',       cost:800,tint:'#7c7c98'},
-  {id:'sakura', name:'Sakura',       cost:500,tint:'#ff9ebb'},
-  {id:'mint',   name:'Mint',         cost:500,tint:'#8fe8b8'},
-  {id:'aoi',    name:'Aoi',          cost:700,tint:'#8fc6ff'},
+  {id:'default',name:'ナゴヤ人間',     cost:0,tint:'#ffffff'},
+  {id:'gold',   name:'ゴールド',       cost:600,tint:'#ffd24a'},
+  {id:'shadow', name:'シャドウ',       cost:800,tint:'#7c7c98'},
+  {id:'sakura', name:'サクラ',         cost:500,tint:'#ff9ebb'},
+  {id:'mint',   name:'ミント',         cost:500,tint:'#8fe8b8'},
+  {id:'aoi',    name:'アオイ',         cost:700,tint:'#8fc6ff'},
 ];
 const UPGRADES=[
-  {id:'magnet',   ic:'🧲',name:'Coin Magnet',max:5,base:120,desc:'Pull coins from further'},
-  {id:'coinval',  ic:'💰',name:'Coin Value', max:5,base:150,desc:'Each coin is worth more'},
-  {id:'headstart',ic:'🚀',name:'Head Start', max:5,base:140,desc:'Start further down the road'},
-  {id:'shield',   ic:'🛡️',name:'Extra Heart', max:2,base:700,desc:'Begin with +1 HP'},
+  {id:'magnet',   ic:'🧲',name:'コインマグネット',max:5,base:120,desc:'コインを遠くから引き寄せる'},
+  {id:'coinval',  ic:'💰',name:'コイン価値',      max:5,base:150,desc:'コイン1枚の価値が上がる'},
+  {id:'headstart',ic:'🚀',name:'ヘッドスタート',  max:5,base:140,desc:'先の地点からスタート'},
+  {id:'shield',   ic:'🛡️',name:'エクストラハート', max:2,base:700,desc:'HP+1でスタート'},
 ];
 function maxHP(){ return HP_MAX+(SAVE.up.shield||0); }
 function upCost(u){ const lvl=SAVE.up[u.id]||0; return Math.round(u.base*Math.pow(2.1,lvl)); }
@@ -901,11 +901,11 @@ function applySkin(){ const sk=SKINS.find(s=>s.id===SAVE.skin)||SKINS[0];
     o.material.needsUpdate=true; } }); }
 // ミッション（1ラン内目標・3枠・達成で報酬＋自動補充）
 const MISS_TYPES={
-  dist: {ic:'🏁',label:m=>'Run '+m+'m in one run',  opts:[600,800,1200], stat:'dist'},
-  coins:{ic:'🥤',label:m=>'Collect '+m+' coins',    opts:[30,50,80],     stat:'coins'},
-  near: {ic:'✨',label:m=>m+' near-misses',         opts:[6,12,20],      stat:'near'},
-  combo:{ic:'🔥',label:m=>'Reach a '+m+'x combo',    opts:[2.5,3.5,5],    stat:'multmax'},
-  jump: {ic:'🦘',label:m=>'Jump '+m+' times',        opts:[15,25,40],     stat:'jump'},
+  dist: {ic:'🏁',label:m=>'1回の走りで'+m+'m走る', opts:[600,800,1200], stat:'dist'},
+  coins:{ic:'🥤',label:m=>'コインを'+m+'枚集める',  opts:[30,50,80],     stat:'coins'},
+  near: {ic:'✨',label:m=>'ニアミス'+m+'回',        opts:[6,12,20],      stat:'near'},
+  combo:{ic:'🔥',label:m=>'コンボ'+m+'倍に到達',    opts:[2.5,3.5,5],    stat:'multmax'},
+  jump: {ic:'🦘',label:m=>m+'回ジャンプ',           opts:[15,25,40],     stat:'jump'},
 };
 function rollMission(){ const keys=Object.keys(MISS_TYPES); const k=keys[(Math.random()*keys.length)|0], t=MISS_TYPES[k];
   return {k, tgt:t.opts[(Math.random()*t.opts.length)|0], reward:60+((Math.random()*5)|0)*30}; }
@@ -930,20 +930,20 @@ function showOv(el){ if(el)el.classList.add('show'); } function hideOv(el){ if(e
 function rowHTML(ic,nm,ds,extra,btn){ return '<div class="row"><div class="ic">'+ic+'</div><div class="info"><div class="nm">'+nm+'</div><div class="ds">'+ds+'</div>'+(extra||'')+'</div>'+btn+'</div>'; }
 let menuTab='shop';
 function renderMenu(){ ensureMissions();
-  let h='<h2>'+(menuTab==='goals'?'🎯 Goals':menuTab==='skins'?'😎 Characters':'🛒 Shop')+'</h2><div class="bal">🥤 '+(SAVE.coins|0)+' coins</div>';
-  h+='<div class="tabs"><div class="tab '+(menuTab==='shop'?'on':'')+'" data-tab="shop">Upgrades</div><div class="tab '+(menuTab==='skins'?'on':'')+'" data-tab="skins">Characters</div><div class="tab '+(menuTab==='goals'?'on':'')+'" data-tab="goals">Goals</div></div>';
+  let h='<h2>'+(menuTab==='goals'?'🎯 ミッション':menuTab==='skins'?'😎 キャラクター':'🛒 ショップ')+'</h2><div class="bal">🥤 '+(SAVE.coins|0)+' コイン</div>';
+  h+='<div class="tabs"><div class="tab '+(menuTab==='shop'?'on':'')+'" data-tab="shop">強化</div><div class="tab '+(menuTab==='skins'?'on':'')+'" data-tab="skins">キャラ</div><div class="tab '+(menuTab==='goals'?'on':'')+'" data-tab="goals">目標</div></div>';
   if(menuTab==='shop'){ UPGRADES.forEach(u=>{ const lvl=SAVE.up[u.id]||0, cost=upCost(u), maxed=lvl>=u.max, aff=SAVE.coins>=cost;
     const ex='<div class="lv">Lv '+lvl+' / '+u.max+'</div><div class="barwrap"><i style="width:'+(lvl/u.max*100)+'%"></i></div>';
     const btn=maxed?'<button disabled>MAX</button>':'<button data-act="up" data-id="'+u.id+'"'+(aff?'':' disabled')+'>🥤'+cost+'</button>';
     h+=rowHTML(u.ic,u.name,u.desc,ex,btn); }); }
   else if(menuTab==='skins'){ SKINS.forEach(s=>{ const owned=SAVE.skins.indexOf(s.id)>=0, eq=SAVE.skin===s.id, aff=SAVE.coins>=s.cost;
     const sw='<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:'+(s.tint==='#ffffff'?'#1a2a5e':s.tint)+';border:2px solid #fff;vertical-align:middle"></span>';
-    let btn= eq?'<button class="eq" disabled>EQUIPPED</button>' : owned?'<button class="owned" data-act="equip" data-id="'+s.id+'">EQUIP</button>' : '<button data-act="buyskin" data-id="'+s.id+'"'+(aff?'':' disabled')+'>🥤'+s.cost+'</button>';
-    h+=rowHTML(sw,s.name,owned?'Owned':'Tap to unlock',null,btn); }); }
+    let btn= eq?'<button class="eq" disabled>装備中</button>' : owned?'<button class="owned" data-act="equip" data-id="'+s.id+'">装備</button>' : '<button data-act="buyskin" data-id="'+s.id+'"'+(aff?'':' disabled')+'>🥤'+s.cost+'</button>';
+    h+=rowHTML(sw,s.name,owned?'所持済み':'タップで解放',null,btn); }); }
   else { SAVE.miss.forEach(m=>{ const t=MISS_TYPES[m.k], cur=missCur(m), pct=Math.min(100,cur/m.tgt*100), got=cur>=m.tgt;
     const ex='<div class="barwrap"><i style="width:'+pct+'%"></i></div>';
-    h+=rowHTML(t.ic,t.label(m.tgt),'Reward 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
-  h+='<button class="closebtn" data-act="close">CLOSE</button>'; elMenuCard.innerHTML=h; }
+    h+=rowHTML(t.ic,t.label(m.tgt),'報酬 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
+  h+='<button class="closebtn" data-act="close">閉じる</button>'; elMenuCard.innerHTML=h; }
 function openMenu(tab){ menuTab=tab||'shop'; renderMenu(); showOv(elMenu); }
 if(elMenuCard) elMenuCard.addEventListener('click',e=>{ const el=e.target.closest('[data-tab],[data-act]'); if(!el)return;
   if(el.dataset.tab){ menuTab=el.dataset.tab; renderMenu(); return; }
@@ -952,14 +952,14 @@ if(elMenuCard) elMenuCard.addEventListener('click',e=>{ const el=e.target.closes
   else if(act==='up'){ const u=UPGRADES.find(x=>x.id===id), cost=upCost(u), lvl=SAVE.up[id]||0; if(lvl<u.max&&SAVE.coins>=cost){ SAVE.coins-=cost; SAVE.up[id]=lvl+1; save(); sfx('up'); renderMenu(); } }
   else if(act==='buyskin'){ const s=SKINS.find(x=>x.id===id); if(SAVE.coins>=s.cost){ SAVE.coins-=s.cost; SAVE.skins.push(s.id); SAVE.skin=s.id; save(); applySkin(); sfx('up'); renderMenu(); } }
   else if(act==='equip'){ SAVE.skin=id; save(); applySkin(); sfx('coin'); renderMenu(); } });
-function showDailyPopup(r){ if(!elDailyCard)return; elDailyCard.innerHTML='<h2>Daily Reward</h2><div style="text-align:center"><div class="dailyrw">🎁</div><div class="bal">+'+r.rw+' coins</div><div style="color:#9fb0d8;font-weight:800">🔥 '+r.streak+'-day streak</div><button class="closebtn" data-d="1">CLAIM</button></div>';
+function showDailyPopup(r){ if(!elDailyCard)return; elDailyCard.innerHTML='<h2>デイリー報酬</h2><div style="text-align:center"><div class="dailyrw">🎁</div><div class="bal">+'+r.rw+' コイン</div><div style="color:#9fb0d8;font-weight:800">🔥 '+r.streak+'日連続</div><button class="closebtn" data-d="1">受け取る</button></div>';
   showOv(elDaily); const b=elDailyCard.querySelector('[data-d]'); if(b)b.onclick=()=>{ hideOv(elDaily); updateStartBest(); sfx('up'); }; }
 // ポーズ＆設定
-function renderPause(){ if(!elPauseCard)return; elPauseCard.innerHTML='<h2>Paused</h2>'
-  +'<div class="setrow">Sound / SFX<div class="toggle '+(bgmOn?'on':'')+'" data-t="snd"><i></i></div></div>'
-  +'<div class="setrow">Vibration<div class="toggle '+(SAVE.hapt?'on':'')+'" data-t="hapt"><i></i></div></div>'
-  +'<button class="closebtn" data-p="resume">RESUME</button>'
-  +'<button class="closebtn" style="background:#39405e;margin-top:8px" data-p="quit">QUIT TO TITLE</button>'; }
+function renderPause(){ if(!elPauseCard)return; elPauseCard.innerHTML='<h2>ポーズ中</h2>'
+  +'<div class="setrow">サウンド / SE<div class="toggle '+(bgmOn?'on':'')+'" data-t="snd"><i></i></div></div>'
+  +'<div class="setrow">振動<div class="toggle '+(SAVE.hapt?'on':'')+'" data-t="hapt"><i></i></div></div>'
+  +'<button class="closebtn" data-p="resume">再開</button>'
+  +'<button class="closebtn" style="background:#39405e;margin-top:8px" data-p="quit">タイトルへ</button>'; }
 if(elPauseCard) elPauseCard.addEventListener('click',e=>{ const tg=e.target.closest('[data-t]'); if(tg){ if(tg.dataset.t==='snd'){ elBgm.click(); } else { SAVE.hapt=SAVE.hapt?0:1; save(); buzz(20); } renderPause(); return; }
   const p=e.target.closest('[data-p]'); if(!p)return;
   if(p.dataset.p==='resume') resumeGame(); else if(p.dataset.p==='quit'){ paused=false; hideOv(elPause); if(elPauseBtn)elPauseBtn.style.display='none'; showTitle(); updateStartBest(); } });
@@ -973,7 +973,7 @@ function reviveNow(){ if(reviveUsed||SAVE.coins<REVIVE_COST||state!=='dead')retu
   hp=Math.max(hp,2); invulnT=2.6; knockT=0; pvx=0; py=0; vy=0; grounded=true; sliding=false; deadT=0;
   state='run'; if(elOver)elOver.style.display='none'; if(elPauseBtn)elPauseBtn.style.display='flex'; if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;
   if(chars.main){activeChar=chars.main;chars.main.holder.visible=true;setAnim(chars.main,'Running');chars.main.holder.rotation.z=0;chars.main.holder.position.z=0;}
-  sfx('star'); banner('REVIVE!',1200); buzz(40); }
+  sfx('star'); banner('復活！',1200); buzz(40); }
 // 配線
 if(elToShop=document.getElementById('toShop')) elToShop.addEventListener('pointerdown',e=>{ e.stopPropagation(); openMenu('shop'); });
 if(elToMiss=document.getElementById('toMiss')) elToMiss.addEventListener('pointerdown',e=>{ e.stopPropagation(); openMenu('goals'); });
@@ -1046,12 +1046,12 @@ function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner
 // 追跡者（ステージ末ごとに変わる巨大ボス）。前方視点チェイス中、背後にそびえて迫る
 // rot=モデルをプレイヤー方向へ向ける補正ヨー（既定π＝背面から正面へ。横向きモデルは±π/2）
 const PURSUERS={
-  shachi: {f:'shachi', h:8.5, rot:Math.PI,    msg:'Giant Golden Shachi! Dodge sideways!', icon:'🐟'},
-  g_truck:{f:'g_truck2',h:4.8, rot:-Math.PI/2, lift:0.12, pitchK:0.3, msg:'Runaway truck! Dodge sideways!', icon:'🚚'},
-  g_ebi:  {f:'g_ebi',  h:6.8, rot:Math.PI,    msg:'Giant Shrimp Fry incoming! Dodge!',    icon:'🍤'},
+  shachi: {f:'shachi', h:8.5, rot:Math.PI,    msg:'巨大金鯱が来た！横に避けろ！', icon:'🐟'},
+  g_truck:{f:'g_truck2',h:4.8, rot:-Math.PI/2, lift:0.12, pitchK:0.3, msg:'暴走トラックだ！横に避けろ！', icon:'🚚'},
+  g_ebi:  {f:'g_ebi',  h:6.8, rot:Math.PI,    msg:'巨大エビフライ襲来！避けろ！',    icon:'🍤'},
 };
 // ステージ→追跡者の割り当て
-function stageChaseKind(){ return ({'NAGOYA TOWN':'shachi','NAGOYA EXPRESSWAY':'g_truck','HORIKAWA BRIDGE':'g_ebi','CONSTRUCTION SITE':'g_truck','SAKAE NIGHT':'shachi'})[curStage().n] || 'shachi'; }
+function stageChaseKind(){ return ({'ナゴヤの街':'shachi','名古屋高速':'g_truck','堀川・橋':'g_ebi','工事現場':'g_truck','栄の夜':'shachi'})[curStage().n] || 'shachi'; }
 function makePursuer(kind){ const cfg=PURSUERS[kind]||PURSUERS.shachi; const g=new THREE.Group();
   const m=placeModel(cfg.f, cfg.h, cfg.rot!=null?cfg.rot:Math.PI);   // Meshyモデル・大きく・プレイヤー方向へ
   if(m){ m.traverse(o=>{if(o.isMesh)o.castShadow=false}); g.add(m); }
@@ -1076,7 +1076,7 @@ function startChase(kind){ kind=kind||stageChaseKind(); mode='chase'; chaseGap=1
   if(elGap)elGap.parentElement.style.opacity='1'; banner((PURSUERS[kind]||PURSUERS.shachi).msg,2000); }
 function endChase(){ mode='run'; nextChaseAt=scroll+1300;
   if(pursuer)pursuer.visible=false; if(warnMesh)warnMesh.visible=false;
-  if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0'; banner('You escaped!',1500); }
+  if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0'; banner('逃げ切った！',1500); }
 
 // キャラのAABB（当たり判定用の高さ）
 function charBox(){
@@ -1113,7 +1113,7 @@ function frame(now){
     runStat.dist=scroll|0; runStat.coins=coinCount;   // ミッション進捗（ライブ）
     // 500mごとのマイルストーン祝祭（紙吹雪＋ボーナス）
     if(scroll-lastMilestone>=500){ lastMilestone+=500; banner(lastMilestone+'m! 🎉',1300); confetti(); sfx('up'); camShake=Math.max(camShake,0.32);
-      const bonus=50; score+=bonus; popText('MILESTONE +'+bonus,'#ffd84a',W()/2,H()*0.4,true); buzz(40); }
+      const bonus=50; score+=bonus; popText('ボーナス +'+bonus,'#ffd84a',W()/2,H()*0.4,true); buzz(40); }
     // ジャンプ物理（着地でスクワッシュ）
     if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true; squashT=0.16; squashKind=-1; if(rideT<=0)buzz(10);}}
     if(sliding){slideT-=dt; if(slideT<=0)sliding=false;}
@@ -1121,7 +1121,7 @@ function frame(now){
     if(dashT>0)dashT-=dt; if(dashCD>0)dashCD-=dt; if(invulnT>0)invulnT-=dt;
     if(invertT>0)invertT-=dt;
     if(comboT>0){ comboT-=dt; if(comboT<=0) breakCombo(); }   // コンボ時間切れでリセット
-    if(rideT>0){ rideT-=dt; if(rideT<=0){ rideT=0; if(board)board.visible=false; banner('🛹 Landed!',1200); } }
+    if(rideT>0){ rideT-=dt; if(rideT<=0){ rideT=0; if(board)board.visible=false; banner('🛹 着地！',1200); } }
     if(knockT>0)knockT-=dt; if(fovKick>0)fovKick-=fovKick*Math.min(1,dt*6);
     // 通常時のみ障害物・コイン・スターをスポーン（チェイス中は金鯱だけ）
     if(mode!=='chase'){
@@ -1158,9 +1158,9 @@ function frame(now){
     deadT+=dt;
     if(deadT>1.4 && elOver.style.display!=='flex'){
       const me=window.__missEarned||0;
-      elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 NEW BEST!</span><br>':'')
-        +'Score '+(score|0)+' &nbsp;·&nbsp; Best '+(SAVE.best|0)+'<br><span style="opacity:.85">🥤 +'+coinCount+(me?' &nbsp;+🎯'+me:'')+' &nbsp;·&nbsp; Bank '+(SAVE.coins|0)+'</span>';
-      if(elReviveBtn){ const rv=canRevive(); elReviveBtn.style.display=rv?'inline-block':'none'; if(rv)elReviveBtn.textContent='REVIVE  🥤'+REVIVE_COST; }
+      elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 自己ベスト更新！</span><br>':'')
+        +'スコア '+(score|0)+' &nbsp;·&nbsp; ベスト '+(SAVE.best|0)+'<br><span style="opacity:.85">🥤 +'+coinCount+(me?' &nbsp;+🎯'+me:'')+' &nbsp;·&nbsp; 貯金 '+(SAVE.coins|0)+'</span>';
+      if(elReviveBtn){ const rv=canRevive(); elReviveBtn.style.display=rv?'inline-block':'none'; if(rv)elReviveBtn.textContent='復活  🥤'+REVIVE_COST; }
       elOver.style.display='flex'; }
   }
 
@@ -1236,13 +1236,13 @@ function frame(now){
           if(ud.instakill && powerT<=0 && dashT<=0){ takeHitHard(); }         // 穴＝即死
           else if(powerT>0){ smash(o); score+=30; camShake=0.2; }             // 無敵スマッシュ
           else if(dashT>0 && ud.breakable){ smash(o); score+=15; camShake=0.15; } // ダッシュ破壊
-          else if(ud.gag==='invert' && dashT<=0){ invertT=5; banner('🔄 Trash can hit! Controls reversed',1700); camShake=0.32; fovKick=Math.max(fovKick,6); spawnPop(o.position.x,1.0,'#7ad0a0'); sfx('hit'); } // ゴミ箱＝操作反転ギャグ（被弾なし）
+          else if(ud.gag==='invert' && dashT<=0){ invertT=5; banner('🔄 ゴミ箱直撃！操作が反転',1700); camShake=0.32; fovKick=Math.max(fovKick,6); spawnPop(o.position.x,1.0,'#7ad0a0'); sfx('hit'); } // ゴミ箱＝操作反転ギャグ（被弾なし）
           else { takeHit(); }
         }
       } else if(!ud.span && xo<COLL_X+half+0.7){   // ニアミス：コンボ＋微スロー＋演出
         addCombo(1); runStat.near++; const gain=Math.round(15*mult); score+=gain;
         slowmo=Math.max(slowmo,0.1); camShake=Math.max(camShake,0.16); fovKick=Math.max(fovKick,4); sfx('near');
-        const s=toScreen(o.position); popText('NICE +'+gain,'#9fe8ff',s.x,s.y-10); }
+        const s=toScreen(o.position); popText('ナイス +'+gain,'#9fe8ff',s.x,s.y-10); }
     }
     if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
   }
@@ -1259,7 +1259,7 @@ function frame(now){
         const s=toScreen(c.position); popText('+'+gain,'#ffd84a',s.x,s.y);
         for(let q=0;q<5;q++)spawnPop(c.position.x+(Math.random()-0.5)*0.5,c.position.y+(Math.random()-0.5)*0.5,'#ffe88a');
         camShake=Math.max(camShake,0.09); sfx('coin', 1+Math.min(combo,14)*0.05);
-        if(combo>1 && combo%5===0){ popText(combo+' COMBO!','#ffd84a',s.x,s.y-34,true); sfx('up',1.2); }
+        if(combo>1 && combo%5===0){ popText(combo+' コンボ!','#ffd84a',s.x,s.y-34,true); sfx('up',1.2); }
         if(coinCount%25===0 && hp<HP_MAX){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); buzz(30); }
         scene.remove(c); coins.splice(i,1); continue; }
     }
@@ -1271,7 +1271,7 @@ function frame(now){
     e.userData.glow.lookAt(camera.position); curveMove(e);   // カーブ/勾配
     if(e.userData.alive && Math.abs(e.position.z)<0.95 && Math.abs(px-e.position.x)<1.1){
       const ey=e.position.y; if(ey>cb.bottom-0.6 && ey<cb.top+0.7){
-        e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'STAR POWER!','#5ff0b0',true); confetti(); sfx('star'); buzz(40); scene.remove(e); emeralds.splice(i,1); continue; }
+        e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'スターパワー！','#5ff0b0',true); confetti(); sfx('star'); buzz(40); scene.remove(e); emeralds.splice(i,1); continue; }
     }
     if(e.position.z>12){scene.remove(e); emeralds.splice(i,1);}
   }
@@ -1348,12 +1348,12 @@ function frame(now){
 
   // HUD
   elSc.textContent=score|0; elCn.textContent=coinCount;
-  if(elCombo){ if(combo>1 && state==='run'){ elCombo.style.opacity='1'; elComboMult.textContent='x'+mult.toFixed(1); elComboCnt.textContent=combo+' COMBO'; } else elCombo.style.opacity='0'; }
+  if(elCombo){ if(combo>1 && state==='run'){ elCombo.style.opacity='1'; elComboMult.textContent='x'+mult.toFixed(1); elComboCnt.textContent=combo+' コンボ'; } else elCombo.style.opacity='0'; }
   if(elHp) elHp.textContent='❤️'.repeat(Math.max(0,hp))+'🖤'.repeat(Math.max(0,HP_MAX-hp));
-  elDist.textContent = powerT>0 ? ('⭐ STAR POWER '+Math.ceil(powerT)+'s')
-    : rideT>0 ? ('🛹 BOMBING '+Math.ceil(rideT)+'s')
-    : invertT>0 ? ('🔄 REVERSED '+Math.ceil(invertT)+'s')
-    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.shachi).icon+' ESCAPING!') : ((scroll|0)+' m'));
+  elDist.textContent = powerT>0 ? ('⭐ スターパワー '+Math.ceil(powerT)+'s')
+    : rideT>0 ? ('🛹 爆走 '+Math.ceil(rideT)+'s')
+    : invertT>0 ? ('🔄 操作反転 '+Math.ceil(invertT)+'s')
+    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.shachi).icon+' 逃走中！') : ((scroll|0)+' m'));
   // S→G 進捗バー＋ランナーマーカー＋タイマー
   if(state==='run') gameTime+=dt;
   if(elProgFill){ const pr=(scroll%STAGE_LEN)/STAGE_LEN; elProgFill.style.width=(pr*100)+'%';
@@ -1380,7 +1380,7 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
   setFootLift(v){FOOT_LIFT=v;}, get footLift(){return FOOT_LIFT;},
   setCurve(k){curveK=k;curveTargetK=k;}, setSlope(k){slopeK=k;slopeTargetK=k;}, get curveK(){return curveK;},
   get combo(){return combo;}, get mult(){return mult;}, get save(){return SAVE;},
-  juiceTest(){ addCombo(6); for(let q=0;q<7;q++)popText('+'+((20*mult)|0),'#ffd84a',W()/2+(Math.random()-0.5)*160,H()/2+(Math.random()-0.5)*100); popText(combo+' COMBO!','#ffd84a',W()/2,H()/2-70,true); confetti(); return {combo,mult}; },
+  juiceTest(){ addCombo(6); for(let q=0;q<7;q++)popText('+'+((20*mult)|0),'#ffd84a',W()/2+(Math.random()-0.5)*160,H()/2+(Math.random()-0.5)*100); popText(combo+' コンボ!','#ffd84a',W()/2,H()/2-70,true); confetti(); return {combo,mult}; },
   skate(){startSkate();}, get rideT(){return rideT;}, invert(s){invertT=s==null?5:s;}, get invertT(){return invertT;},
   chase(kind){startChase(kind);}, get pursuerKind(){return pursuerKind;},
   wave(i){spawnWave(WAVES[i==null?0:i]);}, deco(name){const st=STAGES.find(s=>s.n===name)||curStage(); spawnDeco(st); return decos.length;},
