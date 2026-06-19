@@ -1,0 +1,16 @@
+{
+  "name": "ナゴヤ人間RUN 3D",
+  "short_name": "ナゴヤRUN",
+  "description": "名古屋の街を駆け抜ける3Dランアクション。コインを集めて、巨大ボスから逃げ切れ！",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0e1018",
+  "theme_color": "#e8362e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
