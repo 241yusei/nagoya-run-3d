@@ -48,6 +48,10 @@
   #vig{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .2s;
     background:radial-gradient(ellipse at center, rgba(200,20,20,0) 42%, rgba(190,15,15,.7) 100%)}
   #flash{position:fixed;inset:0;pointer-events:none;z-index:38;background:#fff;opacity:0}
+  #dashfx{position:fixed;inset:0;pointer-events:none;z-index:37;opacity:0;
+    background:radial-gradient(circle at 50% 56%, rgba(255,255,255,0) 34%, rgba(150,205,255,.42) 100%)}
+  #dashfx.on{animation:dashp .42s ease-out}
+  @keyframes dashp{0%{opacity:0}22%{opacity:.95}100%{opacity:0}}
   #banner{position:fixed;top:28%;left:0;right:0;text-align:center;color:#fff;font-size:32px;font-weight:900;
     text-shadow:0 3px 14px rgba(0,0,0,.7);opacity:0;transition:opacity .25s;pointer-events:none}
   #gapwrap{position:fixed;top:96px;left:50%;transform:translateX(-50%);width:220px;height:12px;
@@ -170,6 +174,7 @@
 <div id="gapwrap" class="ui"><div id="gapbar"></div></div>
 <div id="vig"></div>
 <div id="flash"></div>
+<div id="dashfx"></div>
 <div id="fx"></div>
 <div id="combo"><b id="combomult">x1</b><span id="combocnt">コンボ</span></div>
 <div id="banner"></div>
@@ -704,8 +709,15 @@ const WAVES=[
 ];
 function spawnWave(w){ for(const s of w) spawnObAt(s.k, s.x, SPZ-(s.dz||0)); return Math.max.apply(null,w.map(s=>s.dz||0))+8; }
 // パターン1つを生成。手前まで消費した追加距離を返す（次のスポーン間隔に加算）
+// 家具を落とすトラック（ペプシマン的ギミック）：トラック＋後方に落ちた家具(箱)が連なる
+function spawnFurnitureTruck(){ if(typeof banner==='function')banner('🛻 家具を落とすトラック！避けろ！',1900);
+  spawnObAt('car', -1.7, SPZ);                       // トラック本体（背が高い＝横へ避ける）
+  const lanes=[1.7,-1.6,0.3,2.0,-2.0];
+  for(let k=0;k<5;k++) spawnObAt('box', lanes[k], SPZ-9-k*6.5);   // 落とした家具
+  return 36; }
 function spawnPattern(){
   const m=scroll, pool=tierPool(m), r=Math.random();
+  if(m>520 && r<0.10){ return spawnFurnitureTruck(); }                            // 家具トラック（中盤以降・低確率）
   if(m>360 && r<0.24){ return spawnWave(WAVES[(Math.random()*WAVES.length)|0]); } // 手作りウェーブ
   if(r<0.30){ spawnObAtX(Math.random()<0.5?'bar':'lowwall', 0); return 0; }        // 全幅：スライド/ジャンプ
   if(r<0.56){ const gapX=randX(), side=Math.random()<0.5?-1:1;                     // 隙間を縫う：左右に避け障害物
@@ -787,20 +799,25 @@ const elSc=document.getElementById('sc'), elDist=document.getElementById('dist')
 const BGM_TRACKS=['music/bgm1.mp3','music/bgm2.mp3','music/bgm3.mp3','music/bgm4.mp3','music/bgm5.mp3','music/bgm6.mp3','music/bgm7.mp3'];
 const BGM_VOL=0.55, BGM_VOL_DEAD=0.16;
 const bgmAudio=new Audio(); bgmAudio.volume=BGM_VOL; bgmAudio.preload='auto';
-let bgmOn=true, bgmStarted=false, bgmOrder=[], bgmIdx=0;
+let bgmOn=true, sfxOn=true, bgmStarted=false, bgmOrder=[], bgmIdx=0;
+// BGM音量フェード（死亡/復活/通常で滑らかに切替）
+let bgmFadeT=null;
+function fadeBgm(target,dur){ if(bgmFadeT){clearInterval(bgmFadeT);bgmFadeT=null;} const from=bgmAudio.volume, steps=Math.max(1,Math.round((dur||0.35)/0.03)); let i=0;
+  bgmFadeT=setInterval(()=>{ i++; bgmAudio.volume=Math.max(0,Math.min(1, from+(target-from)*(i/steps))); if(i>=steps){clearInterval(bgmFadeT);bgmFadeT=null;} },30); }
 function shuffleBgm(){ bgmOrder=BGM_TRACKS.map((_,i)=>i); for(let i=bgmOrder.length-1;i>0;i--){const j=(Math.random()*(i+1))|0; [bgmOrder[i],bgmOrder[j]]=[bgmOrder[j],bgmOrder[i]];} bgmIdx=0; }
 function playNextBgm(){ if(!bgmOn)return; if(bgmIdx>=bgmOrder.length)shuffleBgm(); bgmAudio.src=BGM_TRACKS[bgmOrder[bgmIdx++]]; const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
 bgmAudio.addEventListener('ended',playNextBgm);
 function startBgm(){ if(bgmStarted||!bgmOn)return; bgmStarted=true; shuffleBgm(); playNextBgm(); }
 const elBgm=document.getElementById('bgm');
+function updateBgmIcon(){ if(elBgm)elBgm.textContent=(bgmOn||sfxOn)?'🔊':'🔇'; }
+function applyBgmPlayback(){ if(bgmOn){ if(starMusicOn){ const p=starAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
+    else if(!bgmStarted)startBgm(); else { const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
+  else { bgmAudio.pause(); if(typeof starAudio!=='undefined')starAudio.pause(); } }
+// BGM・効果音を個別に設定（永続化）。マスターミュートはHUDの🔊から
+function setAudio(bgm,sfx){ bgmOn=bgm; sfxOn=sfx; if(typeof SAVE!=='undefined'){ SAVE.bgmOn=bgm?1:0; SAVE.sfxOn=sfx?1:0; save(); } updateBgmIcon(); applyBgmPlayback(); }
 elBgm.addEventListener('pointerdown',e=>e.stopPropagation());
 elBgm.addEventListener('pointerup',e=>e.stopPropagation());
-elBgm.addEventListener('click',(e)=>{ e.stopPropagation();
-  bgmOn=!bgmOn; elBgm.textContent=bgmOn?'🔊':'🔇';
-  if(bgmOn){ if(starMusicOn){ const p=starAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
-    else if(!bgmStarted)startBgm(); else { const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
-  else { bgmAudio.pause(); starAudio.pause(); }
-});
+elBgm.addEventListener('click',(e)=>{ e.stopPropagation(); const any=bgmOn||sfxOn; setAudio(!any,!any); });   // マスターミュート（両方）
 // ブラウザの自動再生制限：最初のユーザー操作で開始
 ['keydown','pointerdown'].forEach(ev=>addEventListener(ev,startBgm,{once:false}));
 // 星（無敵）状態のキラキラBGM
@@ -808,11 +825,11 @@ const starAudio=new Audio('music/star.mp3'); starAudio.loop=true; starAudio.volu
 let starMusicOn=false;
 function enterStarMusic(){ if(!bgmOn||starMusicOn)return; starMusicOn=true; bgmAudio.pause(); starAudio.currentTime=0; const p=starAudio.play(); if(p&&p.catch)p.catch(()=>{}); }
 function exitStarMusic(){ if(!starMusicOn)return; starMusicOn=false; starAudio.pause();
-  if(bgmOn&&bgmStarted){ const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
+  if(bgmOn&&bgmStarted){ bgmAudio.volume=BGM_VOL; const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
 
 // ===== 効果音（WebAudio合成・ファイル不要）=====
 let actx=null;
-function sfx(name,rate){ if(!bgmOn)return; try{   // ミュート中(🔇)は効果音も鳴らさない。rate=ピッチ倍率（コンボで上昇）
+function sfx(name,rate){ if(!sfxOn)return; try{   // 効果音OFF時は鳴らさない。rate=ピッチ倍率（コンボで上昇）
   if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
   if(actx.state==='suspended') actx.resume();
   const P={ jump:[520,900,0.16,'square',0.16], slide:[320,130,0.22,'sawtooth',0.15], dash:[200,1300,0.22,'sawtooth',0.18],
@@ -838,9 +855,13 @@ function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
   if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
   banner('🛹 スケボー！下り坂を爆走（操作が重い）',2200); }
+const elDashFx=document.getElementById('dashfx');
+function dashLines(){ if(SAVE.fx===0||!elDashFx)return; elDashFx.classList.remove('on'); void elDashFx.offsetWidth; elDashFx.classList.add('on'); }
 function doDash(){ if(state!=='run'||paused||dashCD>0||dashT>0)return;
   dashT=DASH_DUR; dashCD=DASH_CD; invulnT=Math.max(invulnT,DASH_DUR);
-  fovKick=Math.max(fovKick,18); camShake=Math.max(camShake,0.18); sfx('dash'); buzz(15); }
+  fovKick=Math.max(fovKick,22); camShake=Math.max(camShake,0.22); dashLines();
+  for(let q=0;q<5;q++)spawnPop(px+(Math.random()-0.5)*0.7, 0.3+Math.random()*1.6, '#bfe6ff');   // 残像トレイル
+  sfx('dash'); sfx('near',1.5); buzz(18); }   // 二重whoosh
 addEventListener('keydown',e=>{
   if(e.repeat)return;
   if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();doJump();}
@@ -882,9 +903,11 @@ showTitle();   // 初期表示
 const SAVE_KEY='nagoyaRun3D_v1';
 function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||{}; }catch(e){ return {}; } }
 const SAVE=Object.assign({ best:0, coins:0, plays:0, skin:'default', skins:['default'],
-  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1 }, loadSave());
+  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1, bgmOn:1, sfxOn:1, history:[] }, loadSave());
 if(!SAVE.up) SAVE.up={magnet:0,coinval:0,headstart:0,shield:0};
+if(!Array.isArray(SAVE.history)) SAVE.history=[];
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){} }
+bgmOn=(SAVE.bgmOn!==0); sfxOn=(SAVE.sfxOn!==0); updateBgmIcon();   // 保存済みの音声設定を反映
 function buzz(ms){ if(SAVE.hapt && navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
 window.__newBest=false;
 const elBest=document.getElementById('startbest');
@@ -985,8 +1008,8 @@ function showOv(el){ if(el)el.classList.add('show'); } function hideOv(el){ if(e
 function rowHTML(ic,nm,ds,extra,btn){ return '<div class="row"><div class="ic">'+ic+'</div><div class="info"><div class="nm">'+nm+'</div><div class="ds">'+ds+'</div>'+(extra||'')+'</div>'+btn+'</div>'; }
 let menuTab='shop';
 function renderMenu(){ ensureMissions();
-  let h='<h2>'+(menuTab==='goals'?'🎯 ミッション':menuTab==='skins'?'😎 キャラクター':'🛒 ショップ')+'</h2><div class="bal">🥤 '+(SAVE.coins|0)+' コイン</div>';
-  h+='<div class="tabs"><div class="tab '+(menuTab==='shop'?'on':'')+'" data-tab="shop">強化</div><div class="tab '+(menuTab==='skins'?'on':'')+'" data-tab="skins">キャラ</div><div class="tab '+(menuTab==='goals'?'on':'')+'" data-tab="goals">目標</div></div>';
+  let h='<h2>'+(menuTab==='records'?'🏆 記録':menuTab==='goals'?'🎯 ミッション':menuTab==='skins'?'😎 キャラクター':'🛒 ショップ')+'</h2><div class="bal">🥤 '+(SAVE.coins|0)+' コイン</div>';
+  h+='<div class="tabs"><div class="tab '+(menuTab==='shop'?'on':'')+'" data-tab="shop">強化</div><div class="tab '+(menuTab==='skins'?'on':'')+'" data-tab="skins">キャラ</div><div class="tab '+(menuTab==='goals'?'on':'')+'" data-tab="goals">目標</div><div class="tab '+(menuTab==='records'?'on':'')+'" data-tab="records">記録</div></div>';
   if(menuTab==='shop'){ UPGRADES.forEach(u=>{ const lvl=SAVE.up[u.id]||0, cost=upCost(u), maxed=lvl>=u.max, aff=SAVE.coins>=cost;
     const ex='<div class="lv">Lv '+lvl+' / '+u.max+'</div><div class="barwrap"><i style="width:'+(lvl/u.max*100)+'%"></i></div>';
     const btn=maxed?'<button disabled>MAX</button>':'<button data-act="up" data-id="'+u.id+'"'+(aff?'':' disabled')+'>🥤'+cost+'</button>';
@@ -995,9 +1018,16 @@ function renderMenu(){ ensureMissions();
     const sw='<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:'+(s.tint==='#ffffff'?'#1a2a5e':s.tint)+';border:2px solid #fff;vertical-align:middle"></span>';
     let btn= eq?'<button class="eq" disabled>装備中</button>' : owned?'<button class="owned" data-act="equip" data-id="'+s.id+'">装備</button>' : '<button data-act="buyskin" data-id="'+s.id+'"'+(aff?'':' disabled')+'>🥤'+s.cost+'</button>';
     h+=rowHTML(sw,s.name,owned?'所持済み':'タップで解放',null,btn); }); }
-  else { SAVE.miss.forEach(m=>{ const t=MISS_TYPES[m.k], cur=missCur(m), got=m.done||cur>=m.tgt, pct=got?100:Math.min(100,cur/m.tgt*100);
+  else if(menuTab==='goals'){ SAVE.miss.forEach(m=>{ const t=MISS_TYPES[m.k], cur=missCur(m), got=m.done||cur>=m.tgt, pct=got?100:Math.min(100,cur/m.tgt*100);
     const ex='<div class="barwrap"><i style="width:'+pct+'%"></i></div>';
     h+=rowHTML(t.ic,t.label(m.tgt),'報酬 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
+  else { // 記録（ローカルのベスト＆上位ラン）
+    h+=rowHTML('🏆','ベスト '+(SAVE.best|0),'プレイ '+(SAVE.plays|0)+'回 ・ 貯金 🥤'+(SAVE.coins|0),null,'');
+    const top=SAVE.history.slice().sort((a,b)=>b.s-a.s).slice(0,5);
+    if(!top.length) h+='<div class="ds" style="text-align:center;padding:16px 4px">まだ記録がありません。走ってみよう！</div>';
+    const med=['🥇','🥈','🥉','4位','5位'];
+    top.forEach((rn,i)=>{ const d=new Date(rn.t), ds=(d.getMonth()+1)+'/'+d.getDate();
+      h+=rowHTML(med[i],'スコア '+(rn.s|0),'距離 '+(rn.d|0)+'m ・ 🥤'+(rn.c|0)+' ・ '+ds,null,''); }); }
   h+='<button class="closebtn" data-act="close">閉じる</button>'; elMenuCard.innerHTML=h; }
 function openMenu(tab){ menuTab=tab||'shop'; renderMenu(); showOv(elMenu); }
 if(elMenuCard) elMenuCard.addEventListener('click',e=>{ const el=e.target.closest('[data-tab],[data-act]'); if(!el)return;
@@ -1011,13 +1041,14 @@ function showDailyPopup(r){ if(!elDailyCard)return; elDailyCard.innerHTML='<h2>�
   showOv(elDaily); const b=elDailyCard.querySelector('[data-d]'); if(b)b.onclick=()=>{ hideOv(elDaily); updateStartBest(); sfx('up'); }; }
 // ポーズ＆設定
 function renderPause(){ if(!elPauseCard)return; elPauseCard.innerHTML='<h2>ポーズ中</h2>'
-  +'<div class="setrow">サウンド / SE<div class="toggle '+(bgmOn?'on':'')+'" data-t="snd"><i></i></div></div>'
+  +'<div class="setrow">BGM<div class="toggle '+(bgmOn?'on':'')+'" data-t="bgm"><i></i></div></div>'
+  +'<div class="setrow">効果音 (SE)<div class="toggle '+(sfxOn?'on':'')+'" data-t="se"><i></i></div></div>'
   +'<div class="setrow">振動<div class="toggle '+(SAVE.hapt?'on':'')+'" data-t="hapt"><i></i></div></div>'
   +'<div class="setrow">演出ひかえめ<div class="toggle '+(SAVE.fx===0?'on':'')+'" data-t="fx"><i></i></div></div>'
   +'<button class="closebtn" data-p="resume">再開</button>'
   +'<button class="closebtn" style="background:#39405e;margin-top:8px" data-p="quit">タイトルへ</button>'; }
 if(elPauseCard) elPauseCard.addEventListener('click',e=>{ const tg=e.target.closest('[data-t]'); if(tg){ const k=tg.dataset.t;
-    if(k==='snd'){ elBgm.click(); } else if(k==='hapt'){ SAVE.hapt=SAVE.hapt?0:1; save(); buzz(20); } else if(k==='fx'){ SAVE.fx=(SAVE.fx===0)?1:0; save(); } renderPause(); return; }
+    if(k==='bgm'){ setAudio(!bgmOn,sfxOn); } else if(k==='se'){ setAudio(bgmOn,!sfxOn); } else if(k==='hapt'){ SAVE.hapt=SAVE.hapt?0:1; save(); buzz(20); } else if(k==='fx'){ SAVE.fx=(SAVE.fx===0)?1:0; save(); } renderPause(); return; }
   const p=e.target.closest('[data-p]'); if(!p)return;
   if(p.dataset.p==='resume') resumeGame(); else if(p.dataset.p==='quit'){ paused=false; hideOv(elPause); if(elPauseBtn)elPauseBtn.style.display='none'; showTitle(); updateStartBest(); } });
 function pauseGame(){ if(state!=='run'||paused)return; paused=true; renderPause(); showOv(elPause); }
@@ -1030,7 +1061,7 @@ function reviveNow(){ if(reviveUsed||SAVE.coins<REVIVE_COST||state!=='dead')retu
   save();
   obstacles.forEach(o=>scene.remove(o)); obstacles.length=0; if(mode==='chase')endChase();
   hp=maxHP(); invulnT=2.6; knockT=0; pvx=0; py=0; vy=0; grounded=true; sliding=false; deadT=0;   // ←バグ修正：シールド込みで全回復
-  state='run'; if(elOver)elOver.style.display='none'; if(elPauseBtn)elPauseBtn.style.display='flex'; if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;
+  state='run'; if(elOver)elOver.style.display='none'; if(elPauseBtn)elPauseBtn.style.display='flex'; if(bgmOn&&bgmStarted)fadeBgm(BGM_VOL,0.3);
   if(chars.main){activeChar=chars.main;chars.main.holder.visible=true;setAnim(chars.main,'Running');chars.main.holder.rotation.z=0;chars.main.holder.position.z=0;}
   sfx('star'); banner('復活！',1200); buzz(40); }
 // 配線
@@ -1071,7 +1102,7 @@ function reset(){
   if(chars.gold)chars.gold.holder.visible=false;
   if(chars.main){chars.main.holder.visible=true; activeChar=chars.main; setAnim(chars.main,'Running'); chars.main.holder.rotation.z=0; chars.main.holder.position.z=0;}
   state='run'; elOver.style.display='none';
-  if(bgmOn&&bgmStarted)bgmAudio.volume=BGM_VOL;   // BGM音量を通常に戻す
+  if(bgmOn&&bgmStarted)fadeBgm(BGM_VOL,0.3);   // BGM音量を通常に戻す（フェード）
 }
 function restart(){ reset(); }
 function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0.95; slowmo=0.35; sfx('crash'); breakCombo(); buzz(90);
@@ -1082,8 +1113,13 @@ function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0
   SAVE.coins=(SAVE.coins||0)+Math.max(0,coinCount-bankedCoins); bankedCoins=coinCount;
   runStat.dist=Math.max(runStat.dist,scroll|0); runStat.coins=Math.max(runStat.coins,coinCount);
   window.__missEarned = evalMissions();
-  window.__newBest = (score|0)>(SAVE.best||0); if(window.__newBest){ SAVE.best=score|0; } save();
-  bgmAudio.volume=BGM_VOL_DEAD;                    // ゲームオーバー中はBGMを小さく
+  window.__newBest = (score|0)>(SAVE.best||0); if(window.__newBest){ SAVE.best=score|0; }
+  // ラン履歴（リバイブで続いた同一ランは更新／最大30件）
+  const rec={s:score|0,d:scroll|0,c:coinCount,t:Date.now()};
+  if(reviveUsed && SAVE.history.length) SAVE.history[SAVE.history.length-1]=rec; else SAVE.history.push(rec);
+  if(SAVE.history.length>30) SAVE.history=SAVE.history.slice(-30);
+  save();
+  fadeBgm(BGM_VOL_DEAD,0.4);                       // ゲームオーバー：BGMをふわっと小さく
   if(activeChar&&activeChar.ACT['KnockDown']) setAnim(activeChar,'KnockDown'); }
 // 障害物を吹っ飛ばす（無敵スマッシュ／ダッシュ破壊で共用）
 function smash(o){ const ud=o.userData; ud.smashed=true; ud.vx=(Math.random()-0.5)*7; ud.vy=11+Math.random()*5; ud.vz=7; ud.spin=(Math.random()-0.5)*16; }

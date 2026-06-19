@@ -1,5 +1,5 @@
-// ナゴヤ人間RUN 3D — Service Worker（キャッシュ優先で高速＆オフライン対応）
-const V = 'nagoya-run-v2';
+// ナゴヤ人間RUN 3D — Service Worker（HTMLはネット優先で常に最新／重いアセットはキャッシュ優先で高速＆オフライン対応）
+const V = 'nagoya-run-v3';
 const CORE = [
   './', './index.html',
   './libs/three.min.js', './libs/GLTFLoader.js',
@@ -19,6 +19,16 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const isHTML = e.request.mode === 'navigate' || e.request.destination === 'document';
+  if (isHTML) {
+    // HTMLはネットワーク優先（更新を即反映）。オフライン時のみキャッシュ
+    e.respondWith(
+      fetch(e.request).then(resp => { const cc = resp.clone(); caches.open(V).then(c => c.put(e.request, cc)); return resp; })
+        .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+  // それ以外（GLB/音/画像/JS）はキャッシュ優先＋ランタイムキャッシュ
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
       if (resp && resp.status === 200 && resp.type === 'basic') {
