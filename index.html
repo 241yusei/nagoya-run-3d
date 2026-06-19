@@ -214,7 +214,7 @@ scene.background=new THREE.Color('#8fcdf0');   // 明るい青空（カートゥ
 scene.fog=new THREE.Fog('#d4ecf7', 160, 440);  // 薄く遠く
 
 const camera=new THREE.PerspectiveCamera(48, W()/H(), 0.1, 600);
-const CAM_BASE=new THREE.Vector3(0.0,3.0,8.0);   // ペプシマン：中央背後・低め・道路を真っ直ぐ見る
+const CAM_BASE=new THREE.Vector3(0.0,4.3,9.6);   // 高め＆引き気味で道路と障害物を見やすく
 camera.position.copy(CAM_BASE);
 
 // ===== ライト =====
@@ -607,7 +607,7 @@ function mesh(g,m,y){const x=new THREE.Mesh(g,m);x.position.y=y||0;x.castShadow=
 const MODELS={};
 ['car','enemy','tree','shop','house','c_castle','c_tower','c_oasis','c_arena','c_science','c_taiyo','c_osu',
  'ex_pillar','guardrail','truss','crane','barricade','neon','crowd',
- 'b_shadow','b_eleph','b_rtruck','b_blue','b_retro'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
+ 'b_rtruck','b_blue','b_retro'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
   const m=g.scene; m.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.frustumCulled=false; if(o.material&&o.material.map)o.material.map.encoding=THREE.sRGBEncoding;} });
   const b=new THREE.Box3().setFromObject(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
   MODELS[name]={scene:m, h0:sz.y||1, cx:c.x, cz:c.z, minY:b.min.y};
@@ -746,7 +746,7 @@ let board=null;                    // スケートボードのメッシュ
 let dashT=0, dashCD=0, invulnT=0, knockT=0, knockVz=0;
 const DASH_DUR=0.45, DASH_CD=1.4, DASH_BOOST=10;
 let hp=3; const HP_MAX=3;
-const FOV_BASE=48; let fovKick=0;
+const FOV_BASE=52; let fovKick=0;
 let hitstop=0, slowmo=0;
 let mode='run', nextChaseAt=600, chaseEnd=0, chaseGap=1, pursuer=null, pursuerKind=null; // チェイス演出
 let chasePlan=[];                  // ステージ末ごとの追跡イベント発動位置
@@ -1088,9 +1088,9 @@ function reset(){
   applySkin(); if(elPauseBtn)elPauseBtn.style.display='flex';
   if(chars.main)chars.main.holder.scale.set(1,1,1); if(chars.gold)chars.gold.holder.scale.set(1,1,1);
   mode='run'; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
-  // ステージ末ごとに追跡者：各ステージ境界の手前200mで発動。最終ステージ以降は周期。
-  chasePlan=[]; for(let i=1;i<STAGES.length;i++) chasePlan.push(STAGES[i].from-200);
-  nextChaseAt=STAGES[STAGES.length-1].from+520;
+  // 追跡者は周期的に出現（頻度は控えめ＝約1100mごと）。初回はさらに後ろ倒し
+  chasePlan=[]; chaseIdx=0;
+  nextChaseAt = (SAVE.plays===0 ? 1000 : 820) + Math.random()*160;
   nextSkateAt = 540 + Math.random()*160;   // 最初のスケボー区間（以降は周期的に再出現）
   curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null;
   scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
@@ -1141,15 +1141,14 @@ function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner
 // 追跡者（ステージ末ごとに変わる巨大ボス）。前方視点チェイス中、背後にそびえて迫る
 // rot=モデルをプレイヤー方向へ向ける補正ヨー（既定π＝背面から正面へ。横向きモデルは±π/2）
 const PURSUERS={
-  b_shadow:{f:'b_shadow', h:7,   rot:Math.PI,    lift:0.08, pitchK:0.5, msg:'シャドウ人間あらわる！横に避けろ！', icon:'🌑'},
   b_rtruck:{f:'b_rtruck', h:4.8, rot:-Math.PI/2, lift:0.12, pitchK:0.3, msg:'暴走ダンプが来た！横に避けろ！',   icon:'🚛'},
-  b_eleph: {f:'b_eleph',  h:6,   rot:Math.PI,    lift:0.06, pitchK:0.25,msg:'巨大アイズ象が突進！避けろ！',     icon:'🐘'},
   b_blue:  {f:'b_blue',   h:6.8, rot:Math.PI,    lift:0.08, pitchK:0.5, msg:'青ヒゲ番長が追ってきた！避けろ！', icon:'🧥'},
   b_retro: {f:'b_retro',  h:6.8, rot:Math.PI,    lift:0.08, pitchK:0.5, msg:'レトロおじが来た！横に避けろ！',   icon:'🕶️'},
 };
-// ステージ→追跡者の割り当て（1ステージ＝1ボス）
-function stageChaseKind(){ return ({'ナゴヤの街':'b_shadow','名古屋高速':'b_rtruck','堀川・橋':'b_eleph','工事現場':'b_blue','栄の夜':'b_retro'})[curStage().n] || 'b_shadow'; }
-function makePursuer(kind){ const cfg=PURSUERS[kind]||PURSUERS.b_shadow; const g=new THREE.Group();
+// 追跡者は3体をローテーション（出現頻度は控えめ）
+const BOSS_ROT=['b_rtruck','b_blue','b_retro']; let chaseIdx=0;
+function stageChaseKind(){ return BOSS_ROT[(chaseIdx++)%BOSS_ROT.length]; }
+function makePursuer(kind){ const cfg=PURSUERS[kind]||PURSUERS.b_rtruck; const g=new THREE.Group();
   const m=placeModel(cfg.f, cfg.h, cfg.rot!=null?cfg.rot:Math.PI);   // Meshyモデル・大きく・プレイヤー方向へ
   if(m){ m.traverse(o=>{if(o.isMesh)o.castShadow=false}); g.add(m); }
   else { const gold=new THREE.MeshStandardMaterial({color:'#e8c349',metalness:0.9,roughness:0.25,emissive:'#5a4410',emissiveIntensity:0.45});
@@ -1170,8 +1169,8 @@ function startChase(kind){ kind=kind||stageChaseKind(); mode='chase'; chaseGap=1
   pursuer.visible=true; pursuer.position.set(0,3.6,10.5); pursuer.rotation.set(0,0,0);
   if(!warnMesh){ warnMesh=makeWarn(); scene.add(warnMesh); } warnMesh.visible=false;
   atkPhase='idle'; atkT=1.0;
-  if(elGap)elGap.parentElement.style.opacity='1'; banner((PURSUERS[kind]||PURSUERS.b_shadow).msg,2000); }
-function endChase(){ mode='run'; nextChaseAt=scroll+1300;
+  if(elGap)elGap.parentElement.style.opacity='1'; banner((PURSUERS[kind]||PURSUERS.b_rtruck).msg,2000); }
+function endChase(){ mode='run'; nextChaseAt=scroll+740+Math.random()*260;   // 次の追跡まで間隔広め（頻度を半減）
   if(pursuer)pursuer.visible=false; if(warnMesh)warnMesh.visible=false;
   if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0'; banner('逃げ切った！',1500); }
 
@@ -1199,12 +1198,12 @@ function frame(now){
     if(scroll>curveNextAt){ curveNextAt=scroll+90+Math.random()*120;
       curveTargetK=(Math.random()<0.32)?0:(Math.random()<0.5?-1:1)*(st.cAmp*0.4+Math.random()*st.cAmp*0.6); }
     curveK+=(curveTargetK-curveK)*(1-Math.exp(-1.2*dt));
-    if(rideT>0){ slopeTargetK=-0.14; }                                       // スケボー中は急な下り坂で爆走
+    if(rideT>0){ slopeTargetK=-0.11; }                                       // スケボー中の下り（速度は控えめに調整）
     else if(scroll>slopeNextAt){ slopeNextAt=scroll+140+Math.random()*160;
       slopeTargetK=(Math.random()<0.5)?0:(Math.random()<0.5?-1:1)*(st.sAmp*0.5+Math.random()*st.sAmp*0.5); }
     slopeK+=(slopeTargetK-slopeK)*(1-Math.exp(-1.0*dt));
     const downhill = slopeK<0 ? -slopeK*90 : (slopeK>0 ? -slopeK*30 : 0);   // 下りで加速・上りで微減速
-    speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0)+(rideT>0?7:0)+downhill;
+    speed=baseSpeed+(dashT>0?DASH_BOOST:0)+(mode==='chase'?4:0)+(rideT>0?4:0)+downhill;
     scroll+=speed*dt;
     score+=speed*dt*1.2;
     runStat.dist=scroll|0; runStat.coins=coinCount;   // ミッション進捗（ライブ）
@@ -1223,7 +1222,7 @@ function frame(now){
     // 通常時のみ障害物・コイン・スターをスポーン（チェイス中は金鯱だけ）
     if(mode!=='chase'){
       if(tutSteps.length){ if(scroll>tutSteps[0].at){ const s=tutSteps.shift(); banner(s.msg,2300); s.act(); nextOb=-18; } }   // 初回チュートリアル：手作り順序で操作を教える（ランダム障害物は抑制）
-      else { nextOb+=speed*dt; if(nextOb>0){const extra=spawnObstacle(); nextOb=-(obGap(scroll)+extra);} }
+      else { nextOb+=speed*dt; if(nextOb>0){const extra=spawnObstacle(); nextOb=-(obGap(scroll)*(rideT>0?2.4:1)+extra);} }   // スケボー中は障害物をまばらに（難易度緩和）
       nextCoin+=speed*dt; if(nextCoin>0){spawnCoins(SPZ-6); nextCoin=-(11+Math.random()*15);}
       if(starsPlan.length && scroll>starsPlan[0]){ spawnEmerald(SPZ-4); starsPlan.shift(); }
       if(THEME[st.n]){ nextDeco+=speed*dt; if(nextDeco>0){ spawnDeco(st); nextDeco=-THEME[st.n].gap; } }  // ステージ別テーマ装飾
@@ -1231,9 +1230,8 @@ function frame(now){
     if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0; }
     // スケボー区間の発動（高速・橋あたりの下り爆走）
     if(mode==='run' && rideT<=0 && scroll>nextSkateAt){ startSkate(); }
-    // チェイス開始（ステージ末ごとに別の巨大追跡者／最終以降は周期）・進行・終了
-    if(mode==='run' && chasePlan.length && scroll>chasePlan[0]){ chasePlan.shift(); startChase(); }
-    else if(mode==='run' && !chasePlan.length && scroll>nextChaseAt){ startChase(); }
+    // チェイス開始（周期的・3体ローテーション）・進行・終了
+    if(mode==='run' && scroll>nextChaseAt){ startChase(); }
     else if(mode==='chase'){
       // 金鯱の攻撃：予告(tele)→噛みつき(strike)→戻り(rec) を繰り返す。横に避ける
       atkT-=dt;
@@ -1403,7 +1401,7 @@ function frame(now){
   const tBx=px*0.5, tBy=CAM_BASE.y+pull+py*0.10, tBz=CAM_BASE.z+pull*1.2;
   const tCx=px*0.4, tCy=CAM_CHASE.y+py*0.12,     tCz=CAM_CHASE.z;
   const cx=tBx+(tCx-tBx)*chaseCam, cy=tBy+(tCy-tBy)*chaseCam, cz=tBz+(tCz-tBz)*chaseCam;
-  const lBx=px*0.35,lBy=1.2+py*0.25,lBz=-16, lCx=px*0.3,lCy=3.0+py*0.2,lCz=9;
+  const lBx=px*0.35,lBy=0.7+py*0.25,lBz=-20, lCx=px*0.3,lCy=3.0+py*0.2,lCz=9;
   const lx=lBx+(lCx-lBx)*chaseCam, ly=lBy+(lCy-lBy)*chaseCam, lz=lBz+(lCz-lBz)*chaseCam;
   camBaseX += (cx-camBaseX)*(1-Math.exp(-6*dt));                          // x はイージング（揺れを含めない）
   // トラウマ式スクリーンシェイク（trauma²＋連続擬似ノイズ。生randomよりリッチで滑らか）
@@ -1421,7 +1419,7 @@ function frame(now){
   // 追跡者（金鯱）：チェイス中、背後(+z)からgapに応じて迫る
   if(pursuer && pursuer.visible){
     // 本体を動かす：予告で仰け反り→噛みつき/突進で前へ→戻る。lift=接地系(トラック)は浮きを抑える
-    const pc=PURSUERS[pursuerKind]||PURSUERS.b_shadow, lift=pc.lift!=null?pc.lift:1, pk=pc.pitchK!=null?pc.pitchK:1;
+    const pc=PURSUERS[pursuerKind]||PURSUERS.b_rtruck, lift=pc.lift!=null?pc.lift:1, pk=pc.pitchK!=null?pc.pitchK:1;
     let fx=atkX*0.3, fz=10.5, fy=3.6, pitch=0;
     if(atkPhase==='tele'){ fx=atkX*0.5; fz=11.5; fy=4.6; pitch=-0.28; }
     else if(atkPhase==='strike'){ fx=atkX*0.8; fz=4.5; fy=1.0; pitch=0.5; }
@@ -1453,7 +1451,7 @@ function frame(now){
   elDist.textContent = powerT>0 ? ('⭐ スターパワー '+Math.ceil(powerT)+'s')
     : rideT>0 ? ('🛹 爆走 '+Math.ceil(rideT)+'s')
     : invertT>0 ? ('🔄 操作反転 '+Math.ceil(invertT)+'s')
-    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.b_shadow).icon+' 逃走中！') : ((scroll|0)+' m'));
+    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.b_rtruck).icon+' 逃走中！') : ((scroll|0)+' m'));
   // S→G 進捗バー＋ランナーマーカー＋タイマー
   if(state==='run') gameTime+=dt;
   if(elProgFill){ const pr=(scroll%STAGE_LEN)/STAGE_LEN; elProgFill.style.width=(pr*100)+'%';
