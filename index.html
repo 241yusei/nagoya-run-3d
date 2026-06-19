@@ -606,7 +606,7 @@ function mesh(g,m,y){const x=new THREE.Mesh(g,m);x.position.y=y||0;x.castShadow=
 // Meshyで生成した3Dモデル（金鯱・車・敵）を事前ロード→クローンで使い回す
 const MODELS={};
 ['car','enemy','tree','shop','house','c_castle','c_tower','c_oasis','c_arena','c_science','c_taiyo','c_osu',
- 'ex_pillar','guardrail','truss','crane','barricade','neon','crowd',
+ 'ex_pillar','guardrail','crane','barricade','neon','crowd',
  'b_rtruck','b_blue','b_retro'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
   const m=g.scene; m.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.frustumCulled=false; if(o.material&&o.material.map)o.material.map.encoding=THREE.sRGBEncoding;} });
   const b=new THREE.Box3().setFromObject(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
@@ -766,21 +766,20 @@ function curveMove(o){ const u=o.userData;
   o.position.y=u.baseY+groundY(o.position.z)+(u.hopY||0); }
 // ===== ステージ（街→高速→川/橋→工事→栄。空・霧・速度・カーブ感が変わる）=====
 const STAGES=[
-  {n:'ナゴヤの街',  from:0,    sky:'#8fcdf0', fog:'#d4ecf7', spd:11, cAmp:0.006, sAmp:0.03},
-  {n:'名古屋高速',  from:520,  sky:'#a8c6e2', fog:'#cfdcea', spd:13, cAmp:0.011, sAmp:0.07},
-  {n:'堀川・橋',    from:1080, sky:'#9fd6e2', fog:'#cfeef2', spd:14, cAmp:0.009, sAmp:0.04},
-  {n:'工事現場',    from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
-  {n:'栄の夜',      from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
+  {n:'レベル 1',  from:0,    sky:'#8fcdf0', fog:'#d4ecf7', spd:11, cAmp:0.006, sAmp:0.03},
+  {n:'レベル 2',  from:520,  sky:'#a8c6e2', fog:'#cfdcea', spd:13, cAmp:0.011, sAmp:0.07},
+  {n:'レベル 3',  from:1080, sky:'#9fd6e2', fog:'#cfeef2', spd:14, cAmp:0.009, sAmp:0.04},
+  {n:'レベル 4',  from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
+  {n:'レベル 5',  from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
 ];
 function curStage(){ for(let i=STAGES.length-1;i>=0;i--) if(scroll>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
 let lastStage=null;
 // ===== ステージ別テーマ装飾（Meshy）：沿道の景色をステージごとに差し替える =====
 // f=モデル名 / h=高さ / x=道路中心からの距離 / y=設置高 / both=左右両側 / over=道路上空にアーチ
 const THEME={
-  '名古屋高速':{ gap:15, place:[ {f:'guardrail',h:1.2,x:5.2,both:true}, {f:'ex_pillar',h:9.5,x:11.5,both:true} ] },
-  '堀川・橋':  { gap:18, place:[ {f:'truss',h:7.5,x:0,y:3.4,over:true} ] },
-  '工事現場':  { gap:13, place:[ {f:'barricade',h:1.1,x:5.0,both:true}, {f:'crane',h:15,x:13.5,both:true} ] },
-  '栄の夜':    { gap:10, place:[ {f:'neon',h:5.2,x:6.4,both:true}, {f:'crowd',h:1.7,x:5.0,both:true} ] },
+  'レベル 2':{ gap:15, place:[ {f:'guardrail',h:1.2,x:5.2,both:true}, {f:'ex_pillar',h:9.5,x:11.5,both:true} ] },
+  'レベル 4':{ gap:13, place:[ {f:'barricade',h:1.1,x:5.0,both:true}, {f:'crane',h:15,x:13.5,both:true} ] },
+  'レベル 5':{ gap:10, place:[ {f:'neon',h:5.2,x:6.4,both:true}, {f:'crowd',h:1.7,x:5.0,both:true} ] },
 };
 function spawnDeco(st){ const cfg=THEME[st.n]; if(!cfg)return;
   cfg.place.forEach(it=>{ const sides=it.over?[0]:(it.both?[-1,1]:[it.side||1]);
