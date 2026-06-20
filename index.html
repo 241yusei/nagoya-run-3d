@@ -596,6 +596,21 @@ function spawnEmerald(z){
   grp.add(glow);
   grp.userData={alive:true,star:e,glow}; scene.add(grp); emeralds.push(grp);
 }
+// ===== スケボーアイテム（取得すると下り爆走スタート）=====
+const glowTexO=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
+  const g=x.createRadialGradient(64,64,2,64,64,62);g.addColorStop(0,'rgba(255,150,40,.6)');g.addColorStop(1,'rgba(255,150,40,0)');
+  x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(cv);})();
+const skateItems=[];
+function spawnSkateItem(z){
+  const grp=new THREE.Group(); grp.position.set(-1.6+Math.random()*3.2,1.35,z);
+  const spin=new THREE.Group(); grp.add(spin);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.1,2.0),new THREE.MeshStandardMaterial({color:'#ff7a1a',emissive:'#c24800',emissiveIntensity:0.55,roughness:0.4})); deck.castShadow=true; spin.add(deck);
+  const wm=new THREE.MeshStandardMaterial({color:'#1b1b1b',roughness:0.4});
+  [[-0.22,-0.7],[0.22,-0.7],[-0.22,0.7],[0.22,0.7]].forEach(([x,zz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.1,12),wm); w.rotation.z=Math.PI/2; w.position.set(x,-0.13,zz); spin.add(w);});
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(2.7,2.7),new THREE.MeshBasicMaterial({map:glowTexO,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  grp.add(glow);
+  grp.userData={alive:true,spin,glow}; scene.add(grp); skateItems.push(grp);
+}
 
 // ===== 障害物・敵（種類豊富＋動きあり＋難易度段階）=====
 const obstacles=[];
@@ -709,12 +724,25 @@ const WAVES=[
 ];
 function spawnWave(w){ for(const s of w) spawnObAt(s.k, s.x, SPZ-(s.dz||0)); return Math.max.apply(null,w.map(s=>s.dz||0))+8; }
 // パターン1つを生成。手前まで消費した追加距離を返す（次のスポーン間隔に加算）
-// 家具を落とすトラック（ペプシマン的ギミック）：トラック＋後方に落ちた家具(箱)が連なる
-function spawnFurnitureTruck(){ if(typeof banner==='function')banner('🛻 家具を落とすトラック！避けろ！',1900);
-  spawnObAt('car', -1.7, SPZ);                       // トラック本体（背が高い＝横へ避ける）
-  const lanes=[1.7,-1.6,0.3,2.0,-2.0];
-  for(let k=0;k<5;k++) spawnObAt('box', lanes[k], SPZ-9-k*6.5);   // 落とした家具
-  return 36; }
+// 家具が空から落ちてくる（高所→落下アニメ＋着地で土煙＆ドスン）
+function dropFurniture(x,z){
+  const g=new THREE.Group(); g.position.set(x,0,z);
+  g.userData={kind:'box',baseX:x,passed:false,t0:t,half:HALF.box||0.7};
+  BUILD.box(g);
+  if(g.children[0]&&g.children[0].material) g.children[0].material.color.set('#9a6b3a');   // 家具っぽい木目色
+  g.userData.hopY=3.6; g.userData.dropZ=-44; g.userData.dropVy=0; g.userData.landed=false;
+  g.userData.upd=(o,tt,dt2)=>{ const u=o.userData; if(u.landed)return;
+    if(o.position.z>u.dropZ){ u.dropVy-=32*dt2; u.hopY=Math.max(0,u.hopY+u.dropVy*dt2);
+      if(u.hopY<=0){ u.landed=true; u.dropVy=0; for(let q=0;q<6;q++)spawnPop(o.position.x+(Math.random()-0.5)*0.9,0.3,'#caa46a'); camShake=Math.max(camShake,0.14); sfx('hit',0.6); } }
+    else { o.rotation.y+=dt2*1.5; } };   // 落下前は荷台で揺れる
+  scene.add(g); obstacles.push(g);
+}
+// 家具を落とすトラック：本体＋後方に家具を順次「落としていく」
+function spawnFurnitureTruck(){ if(typeof banner==='function')banner('🛻 家具を落とすトラックだ！避けろ！',1900);
+  spawnObAt('car', 0, SPZ);                          // トラック本体（中央＝横へ避ける）
+  const lanes=[-1.7,1.6,-0.3,1.9,-2.0];
+  for(let k=0;k<5;k++) dropFurniture(lanes[k], SPZ-10-k*7);   // 後方へ家具が空から落ちてくる
+  return 40; }
 function spawnPattern(){
   const m=scroll, pool=tierPool(m), r=Math.random();
   if(m>360 && r<0.24){ return spawnWave(WAVES[(Math.random()*WAVES.length)|0]); } // 手作りウェーブ
@@ -850,7 +878,7 @@ function makeBoard(){ const g=new THREE.Group();
   [[-0.2,-0.62],[0.2,-0.62],[-0.2,0.62],[0.2,0.62]].forEach(([x,z])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.1,12),wm); w.rotation.z=Math.PI/2; w.position.set(x,0.12,z); g.add(w);});
   g.visible=false; scene.add(g); return g; }
 function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
-  rideT=11; nextSkateAt = scroll + 760 + Math.random()*320;   // 滞在を長く＋次の区間を予約（周期出現）
+  rideT=11;   // スケボーアイテム取得で発動（出現はnextSkateAtで管理）
   if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
   banner('🛹 スケボー！下り坂を爆走（操作が重い）',2200); }
@@ -1076,6 +1104,7 @@ function reset(){
   obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
   coins.forEach(c=>scene.remove(c)); coins.length=0;
   emeralds.forEach(e=>scene.remove(e)); emeralds.length=0;
+  skateItems.forEach(s=>scene.remove(s)); skateItems.length=0;
   decos.forEach(d=>scene.remove(d)); decos.length=0; nextDeco=0;
   pops.forEach(p=>scene.remove(p.m)); pops.length=0;
   if(pursuer){scene.remove(pursuer); pursuer=null; pursuerKind=null;}
@@ -1090,7 +1119,7 @@ function reset(){
   // 追跡者は周期的に出現（頻度は控えめ＝約1100mごと）。初回はさらに後ろ倒し
   chasePlan=[]; chaseIdx=0;
   nextChaseAt = (SAVE.plays===0 ? 1000 : 820) + Math.random()*160;
-  nextSkateAt = 540 + Math.random()*160;   // 最初のスケボー区間（以降は周期的に再出現）
+  nextSkateAt = 520 + Math.random()*180;   // 最初のスケボーアイテム出現（取得で発動）
   nextFurnitureAt = 420 + Math.random()*120;   // 家具トラックの最初の出現
   curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null;
   scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
@@ -1231,7 +1260,8 @@ function frame(now){
     }
     if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0; }
     // スケボー区間の発動（高速・橋あたりの下り爆走）
-    if(mode==='run' && rideT<=0 && scroll>nextSkateAt){ startSkate(); }
+    // スケボーアイテムを定期的に出現（取得するとスケボー発動）
+    if(mode==='run' && rideT<=0 && scroll>nextSkateAt){ spawnSkateItem(SPZ-4); nextSkateAt = scroll + 780 + Math.random()*320; }
     // チェイス開始（周期的・3体ローテーション）・進行・終了
     if(mode==='run' && scroll>nextChaseAt){ startChase(); }
     else if(mode==='chase'){
@@ -1374,6 +1404,16 @@ function frame(now){
         e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'スターパワー！','#5ff0b0',true); banner('⭐ 無敵だ！敵を突き破れ！',1500); flash('#cfffe6'); confetti(); sfx('star'); buzz(40); scene.remove(e); emeralds.splice(i,1); continue; }
     }
     if(e.position.z>12){scene.remove(e); emeralds.splice(i,1);}
+  }
+  // スケボーアイテム（取得で下り爆走スタート）
+  for(let i=skateItems.length-1;i>=0;i--){const it=skateItems[i];
+    it.position.z+=ws*dt; it.userData.spin.rotation.y+=dt*3; it.userData.spin.rotation.z=Math.sin(t*2.4)*0.18;
+    it.userData.glow.lookAt(camera.position); curveMove(it);
+    if(it.userData.alive && Math.abs(it.position.z)<1.0 && Math.abs(px-it.position.x)<1.25){
+      const iy=it.position.y; if(iy>cb.bottom-0.8 && iy<cb.top+0.9){
+        it.userData.alive=false; spawnPop(it.position.x,it.position.y,'#ff9a3a'); popWorld(it.position,'🛹 GET!','#ff9a3a',true); startSkate(); scene.remove(it); skateItems.splice(i,1); continue; }
+    }
+    if(it.position.z>12){scene.remove(it); skateItems.splice(i,1);}
   }
   // 取得演出（拡大して消える小球）
   for(let i=pops.length-1;i>=0;i--){const p=pops[i]; p.life-=dt; const k=1-p.life/p.max;
