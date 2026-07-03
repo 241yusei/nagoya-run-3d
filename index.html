@@ -671,6 +671,17 @@ const BUILD={
     if(m){ g.add(m); } else { const c=['#2d6cb5','#c43a3a','#e0c040','#3a9d6a'][(Math.random()*4)|0];
       g.add(mesh(new THREE.BoxGeometry(1.7,0.9,2.6),M(c,0.5),0.55)); g.add(mesh(new THREE.BoxGeometry(1.5,0.7,1.4),M(c,0.4),1.25)); }
     g.userData.act='dodge'; },
+  // 家具トラック：白いキャブ＋荷台＋山積みの家具（横に避ける）
+  truck(g){ const body=M('#e8e4dc',0.55), dark=M('#33383f',0.5), wood=M('#9a6b3a',0.75);
+    g.add(mesh(new THREE.BoxGeometry(1.8,1.5,2.6),body,0.95));                    // 荷台
+    const cab=mesh(new THREE.BoxGeometry(1.7,1.1,1.1),body,0.75); cab.position.z=1.85; g.add(cab);
+    const win=mesh(new THREE.BoxGeometry(1.5,0.5,0.08),M('#bfe6f4',0.25),1.05); win.position.z=2.42; g.add(win);
+    [[-0.75,-0.8],[0.75,-0.8],[-0.75,0.9],[0.75,0.9],[-0.75,1.9],[0.75,1.9]].forEach(([x,z])=>{
+      const w=mesh(new THREE.CylinderGeometry(0.3,0.3,0.22,12),dark,0.3); w.rotation.z=Math.PI/2; w.position.set(x,0.3,z); g.add(w); });
+    for(let k=0;k<4;k++){ const b=mesh(new THREE.BoxGeometry(0.55+Math.random()*0.4,0.5,0.6),wood,1.95+((k/2)|0)*0.42); b.position.set((k%2?0.45:-0.45)+(Math.random()-0.5)*0.2,b.position.y,-0.5+(k%2)*0.9); b.rotation.y=Math.random()*0.5; g.add(b); }  // 山積み家具
+    g.userData.act='dodge';
+    g.userData.upd=(o,tt)=>{ o.userData.swayX=o.userData.baseX+Math.sin(tt*2.1)*0.25; };  // ゆらゆら蛇行
+  },
   // 穴（マンホール）：ジャンプで越える。落ちると即死
   hole(g){ g.add(mesh(new THREE.CircleGeometry(0.95,22).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({color:'#0a0a12'}),0.02));
     g.add(mesh(new THREE.TorusGeometry(0.95,0.08,8,22).rotateX(Math.PI/2),M('#e8c349',0.5,'#5a4410'),0.03));
@@ -690,7 +701,7 @@ const BUILD={
     g.userData.act='dodge'; g.userData.gag='invert'; },
 };
 // 当たり判定のx半幅（障害物ごと）
-const HALF={box:0.7,wall:0.7,spikes:0.7,roller:0.75,drone:0.75,enemy:0.55,cone:0.45,car:0.95,hole:0.95,pit:3.6,trash:0.5};
+const HALF={box:0.7,wall:0.7,spikes:0.7,roller:0.75,drone:0.75,enemy:0.55,cone:0.45,car:0.95,truck:1.0,hole:0.95,pit:3.6,trash:0.5};
 function tierPool(m){
   if(m<240) return ['cone','box','car','cone','box','trash'];
   if(m<540) return ['cone','box','car','hole','wall','roller','car','trash'];
@@ -739,7 +750,7 @@ function dropFurniture(x,z){
 }
 // 家具を落とすトラック：本体＋後方に家具を順次「落としていく」
 function spawnFurnitureTruck(){ if(typeof banner==='function')banner('🛻 家具を落とすトラックだ！避けろ！',1900);
-  spawnObAt('car', 0, SPZ);                          // トラック本体（中央＝横へ避ける）
+  spawnObAt('truck', 0, SPZ);                        // トラック本体（家具山積み・蛇行・横へ避ける）
   const lanes=[-1.7,1.6,-0.3,1.9,-2.0];
   for(let k=0;k<5;k++) dropFurniture(lanes[k], SPZ-10-k*7);   // 後方へ家具が空から落ちてくる
   return 40; }
@@ -881,7 +892,7 @@ function startSkate(){ if(rideT>0||state!=='run'||mode==='chase')return;
   rideT=11;   // スケボーアイテム取得で発動（出現はnextSkateAtで管理）
   if(!board)board=makeBoard(); board.visible=true;
   fovKick=Math.max(fovKick,16); camShake=Math.max(camShake,0.2); sfx('dash');
-  banner('🛹 スケボー！下り坂を爆走（操作が重い）',2200); }
+  banner('🛹 スケボーGET！下り坂を爆走だ！',2000); }
 const elDashFx=document.getElementById('dashfx');
 function dashLines(){ if(SAVE.fx===0||!elDashFx)return; elDashFx.classList.remove('on'); void elDashFx.offsetWidth; elDashFx.classList.add('on'); }
 function doDash(){ if(state!=='run'||paused||dashCD>0||dashT>0)return;
@@ -896,7 +907,7 @@ addEventListener('keydown',e=>{
   else if(e.code==='ArrowLeft'||e.code==='KeyA'){e.preventDefault();setSteer(-1);}
   else if(e.code==='ArrowRight'||e.code==='KeyD'){e.preventDefault();setSteer(1);}
   else if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyF'){e.preventDefault();doDash();}
-  else if(e.code==='Enter'&&state==='dead')restart();
+  else if((e.code==='Enter'||e.code==='KeyR')&&state==='dead')restart();
 });
 addEventListener('keyup',e=>{ if(['ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) steerDir=0; });
 // タッチ：左右ホールド＝その方向へ移動 ・ 上スワイプ＝ジャンプ ・ 下スワイプ＝スライド ・ ダブルタップ＝ダッシュ
@@ -1221,8 +1232,9 @@ function frame(now){
   if(state==='run'){
     // ステージ切替（空・霧・速度・カーブ感が変わる）
     const st=curStage();
-    if(st!==lastStage){ lastStage=st; baseSpeed=st.spd; banner(st.n,1700);
-      scene.background.set(st.sky); scene.fog.color.set(st.fog); }
+    if(st!==lastStage){ const isFirst=(lastStage===null); lastStage=st; baseSpeed=st.spd; banner(st.n,1700);
+      scene.background.set(st.sky); scene.fog.color.set(st.fog);
+      if(!isFirst){ flash('#fff3c8'); sfx('up',1.35); buzz(35); popText('レベルアップ！','#ffd84a',W()/2,H()*0.36,true); } }   // 切替の祝祭（開始時は除く）
     // カーブ・勾配を距離で切替（ステージの強さ上限内で）
     if(scroll>curveNextAt){ curveNextAt=scroll+90+Math.random()*120;
       curveTargetK=(Math.random()<0.32)?0:(Math.random()<0.5?-1:1)*(st.cAmp*0.4+Math.random()*st.cAmp*0.6); }
@@ -1246,7 +1258,7 @@ function frame(now){
     if(dashT>0)dashT-=dt; if(dashCD>0)dashCD-=dt; if(invulnT>0)invulnT-=dt;
     if(invertT>0)invertT-=dt;
     if(comboT>0){ comboT-=dt; if(comboT<=0) breakCombo(); }   // コンボ時間切れでリセット
-    if(rideT>0){ rideT-=dt; if(rideT<=0){ rideT=0; if(board)board.visible=false; banner('🛹 着地！',1200); } }
+    if(rideT>0){ rideT-=dt; if(rideT<=0){ rideT=0; if(board)board.visible=false; banner('🛹 着地！',1200); nextOb=-30; invulnT=Math.max(invulnT,0.8); } }   // 着地直後は猶予（障害物間隔＋短い無敵）
     if(knockT>0)knockT-=dt; if(fovKick>0)fovKick-=fovKick*Math.min(1,dt*6);
     // 通常時のみ障害物・コイン・スターをスポーン（チェイス中は金鯱だけ）
     if(mode!=='chase'){
@@ -1372,7 +1384,8 @@ function frame(now){
       } else if(!ud.span && xo<COLL_X+half+0.7){   // ニアミス：コンボ＋微スロー＋演出
         addCombo(1); runStat.near++; const gain=Math.round(15*mult); score+=gain;
         slowmo=Math.max(slowmo,0.1); camShake=Math.max(camShake,0.16); fovKick=Math.max(fovKick,4); sfx('near');
-        const s=toScreen(o.position); popText('ナイス +'+gain,'#9fe8ff',s.x,s.y-10); }
+        const q=['ナイス！','スレスレ！','あぶなっ！','うまい！','やるがや！','ええ根性だ！'][(Math.random()*6)|0];
+        const s=toScreen(o.position); popText(q+' +'+gain,'#9fe8ff',s.x,s.y-10); }
     }
     if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
   }
@@ -1489,7 +1502,7 @@ function frame(now){
   // HUD
   elSc.textContent=score|0; elCn.textContent=coinCount;
   if(elCombo){ if(combo>1 && state==='run'){ elCombo.style.opacity='1'; elComboMult.textContent='x'+mult.toFixed(1); elComboCnt.textContent=combo+' コンボ'; } else elCombo.style.opacity='0'; }
-  if(elHp) elHp.textContent='❤️'.repeat(Math.max(0,hp))+'🖤'.repeat(Math.max(0,HP_MAX-hp));
+  if(elHp) elHp.textContent='❤️'.repeat(Math.max(0,hp))+'🖤'.repeat(Math.max(0,maxHP()-hp));
   elDist.textContent = powerT>0 ? ('⭐ スターパワー '+Math.ceil(powerT)+'s')
     : rideT>0 ? ('🛹 爆走 '+Math.ceil(rideT)+'s')
     : invertT>0 ? ('🔄 操作反転 '+Math.ceil(invertT)+'s')
