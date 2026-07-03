@@ -811,8 +811,11 @@ const STAGES=[
   {n:'レベル 4',  from:1640, sky:'#dcc99a', fog:'#e8ddc2', spd:15, cAmp:0.012, sAmp:0.09},
   {n:'レベル 5',  from:2200, sky:'#3a3358', fog:'#46406a', spd:16, cAmp:0.010, sAmp:0.05},
 ];
-function curStage(){ for(let i=STAGES.length-1;i>=0;i--) if(scroll>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
-let lastStage=null;
+// 周回モード：レベル5到達後は無限に足止めせず、レベル1〜5をループさせつつ周回ごとに速度を上げる
+const LAP_LEN=STAGES[STAGES.length-1].from+(STAGES[STAGES.length-1].from-STAGES[STAGES.length-2].from);
+function lapOf(s){ return Math.floor(s/LAP_LEN); }
+function curStage(){ const s=scroll%LAP_LEN; for(let i=STAGES.length-1;i>=0;i--) if(s>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
+let lastStage=null, lapCount=0;
 // ===== ステージ別テーマ装飾（Meshy）：沿道の景色をステージごとに差し替える =====
 // f=モデル名 / h=高さ / x=道路中心からの距離 / y=設置高 / both=左右両側 / over=道路上空にアーチ
 const THEME={
@@ -865,19 +868,42 @@ function enterStarMusic(){ if(!bgmOn||starMusicOn)return; starMusicOn=true; bgmA
 function exitStarMusic(){ if(!starMusicOn)return; starMusicOn=false; starAudio.pause();
   if(bgmOn&&bgmStarted){ bgmAudio.volume=BGM_VOL; const p=bgmAudio.play(); if(p&&p.catch)p.catch(()=>{}); } }
 
-// ===== 効果音（WebAudio合成・ファイル不要）=====
-let actx=null;
+// ===== 効果音（WebAudio合成・ファイル不要）：複数レイヤー（倍音/ノイズ/サブベース）で質感を強化 =====
+let actx=null, noiseBuf=null;
+function getNoiseBuf(){ if(noiseBuf)return noiseBuf; const n=(actx.sampleRate*0.4)|0, buf=actx.createBuffer(1,n,actx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);   // 減衰する白色雑音（衝撃／風の素材として使い回す）
+  noiseBuf=buf; return buf; }
+function noiseBurst(now,o){ const src=actx.createBufferSource(); src.buffer=getNoiseBuf();
+  const hpf=actx.createBiquadFilter(); hpf.type='highpass'; hpf.frequency.value=o.hp||200;
+  const lpf=actx.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=o.lp||4000;
+  const g=actx.createGain(); const t0=now+(o.delay||0), dur=o.dur||0.12;
+  g.gain.setValueAtTime(o.vol||0.2,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  src.connect(hpf); hpf.connect(lpf); lpf.connect(g); g.connect(actx.destination);
+  src.start(t0); src.stop(t0+dur+0.02); }
+function tone(now,o){ const t0=now+(o.delay||0), dur=o.dur, osc=actx.createOscillator(), g=actx.createGain();
+  osc.type=o.type; osc.connect(g); g.connect(actx.destination);
+  osc.frequency.setValueAtTime(o.f0,t0); osc.frequency.exponentialRampToValueAtTime(Math.max(20,o.f1),t0+dur);
+  g.gain.setValueAtTime(o.vol,t0); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  osc.start(t0); osc.stop(t0+dur+0.02); }
 function sfx(name,rate){ if(!sfxOn)return; try{   // 効果音OFF時は鳴らさない。rate=ピッチ倍率（コンボで上昇）
   if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
   if(actx.state==='suspended') actx.resume();
   const P={ jump:[520,900,0.16,'square',0.16], slide:[320,130,0.22,'sawtooth',0.15], dash:[200,1300,0.22,'sawtooth',0.18],
     coin:[950,1600,0.08,'square',0.14], hit:[180,55,0.26,'square',0.28], crash:[420,40,0.5,'sawtooth',0.3],
-    near:[1300,420,0.1,'sine',0.1], up:[600,1250,0.26,'triangle',0.18], chase:[150,150,0.3,'square',0.22], star:[700,1500,0.3,'triangle',0.18] }[name];
-  if(!P)return; const r=rate||1, now=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
-  const[f0,f1,dur,type,vol]=P; o.type=type; o.connect(g); g.connect(actx.destination);
-  o.frequency.setValueAtTime(f0*r,now); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1*r),now+dur);
-  g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
-  o.start(now); o.stop(now+dur+0.02);
+    near:[1300,420,0.1,'sine',0.1], up:[600,1250,0.26,'triangle',0.18], chase:[150,150,0.3,'square',0.22], star:[700,1500,0.3,'triangle',0.18],
+    clear:[600,1300,0.22,'triangle',0.2] }[name];
+  if(!P)return; const r=rate||1, now=actx.currentTime, [f0,f1,dur,type,vol]=P;
+  tone(now,{f0:f0*r,f1:f1*r,dur,type,vol});
+  if(name==='coin') tone(now,{f0:f0*r*2,f1:f1*r*1.4,dur:dur*0.7,type:'triangle',vol:vol*0.35,delay:0.02});           // ベルの倍音
+  else if(name==='jump') noiseBurst(now,{dur:0.08,vol:0.06,hp:2000,lp:8000});                                        // 踏切の空気音
+  else if(name==='slide') noiseBurst(now,{dur:0.2,vol:0.09,hp:100,lp:1200});                                         // 滑走のシュッ
+  else if(name==='dash') noiseBurst(now,{dur:0.18,vol:0.14,hp:600,lp:5000});                                         // 風切り音
+  else if(name==='hit') noiseBurst(now,{dur:0.14,vol:0.22,hp:80,lp:900});                                            // 被弾の鈍い衝撃
+  else if(name==='crash'){ noiseBurst(now,{dur:0.4,vol:0.28,hp:60,lp:700}); tone(now,{f0:70*r,f1:35*r,dur:0.35,type:'sine',vol:0.22,delay:0.02}); } // クラッシュの重み
+  else if(name==='chase') tone(now,{f0:48*r,f1:42*r,dur:0.5,type:'sine',vol:0.2});                                   // 追跡開始のサブベース唸り
+  else if(name==='star') tone(now,{f0:f1*r*1.5,f1:f1*r*2.2,dur:dur*0.9,type:'sine',vol:vol*0.3,delay:0.05});         // きらめく高音レイヤー
+  else if(name==='up') tone(now,{f0:f0*r*1.5,f1:f1*r*1.5,dur:dur*0.8,type:'triangle',vol:vol*0.6,delay:0.08});       // 2音の和音でお祝い感
+  else if(name==='clear') [1,2,3].forEach(i=>tone(now,{f0:(600+i*200)*r,f1:(1100+i*280)*r,dur:0.22,type:'triangle',vol:0.2,delay:i*0.1}));   // 周回クリアの4音ファンファーレ
 }catch(e){} }
 function doJump(){ if(state==='run'&&grounded&&!paused){vy=JUMP*(dashT>0?1.18:1);grounded=false;sliding=false; squashT=0.16; squashKind=1; runStat.jump++; sfx('jump'); buzz(12);} }
 function doSlide(){ if(state==='run'&&grounded&&!paused){sliding=true;slideT=0.62; sfx('slide');} }
@@ -941,7 +967,7 @@ showTitle();   // 初期表示
 const SAVE_KEY='nagoyaRun3D_v1';
 function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||{}; }catch(e){ return {}; } }
 const SAVE=Object.assign({ best:0, coins:0, plays:0, skin:'default', skins:['default'],
-  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1, bgmOn:1, sfxOn:1, history:[] }, loadSave());
+  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1, bgmOn:1, sfxOn:1, history:[], maxLap:0, clears:0 }, loadSave());
 if(!SAVE.up) SAVE.up={magnet:0,coinval:0,headstart:0,shield:0};
 if(!Array.isArray(SAVE.history)) SAVE.history=[];
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){} }
@@ -981,7 +1007,7 @@ if(SAVE.fxAuto===undefined){ SAVE.fxAuto=1; try{ if(window.matchMedia&&matchMedi
 let squashT=0, squashKind=0;   // kind:1=ストレッチ(跳躍) / -1=スクワッシュ(着地)
 
 // ===== Pass2: リテンション・メッシュ（ショップ/スキン/ミッション/デイリー/リバイブ/ポーズ）=====
-let runStat={dist:0,coins:0,near:0,multmax:0,jump:0}, bankedCoins=0, reviveUsed=false, paused=false;
+let runStat={dist:0,coins:0,near:0,multmax:0,jump:0,lap:0}, bankedCoins=0, reviveUsed=false, paused=false;
 let tutSteps=[];   // 初回プレイのチュートリアル（操作を順番に教える）
 const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 function tutSetup(){ tutSteps = (SAVE.plays>0) ? [] : [
@@ -990,7 +1016,7 @@ function tutSetup(){ tutSteps = (SAVE.plays>0) ? [] : [
   {at:70, msg:isTouch?'穴だ！上スワイプでジャンプ！':'穴だ！↑ ジャンプ！', act:()=>spawnObAtX('hole',0)},
   {at:96, msg:isTouch?'バー！下スワイプでスライド！':'バー！↓ スライドでくぐれ！', act:()=>spawnObAtX('bar',0)},
 ]; }
-function resetRunStat(){ runStat={dist:0,coins:0,near:0,multmax:0,jump:0}; bankedCoins=0; reviveUsed=false; }
+function resetRunStat(){ runStat={dist:0,coins:0,near:0,multmax:0,jump:0,lap:0}; bankedCoins=0; reviveUsed=false; }
 // 着せ替え（1マテリアル＝テクスチャ着色を全身ティントで変化）
 const SKINS=[
   {id:'default',name:'ナゴヤ人間',     cost:0,tint:'#ffffff'},
@@ -1061,11 +1087,12 @@ function renderMenu(){ ensureMissions();
     h+=rowHTML(t.ic,t.label(m.tgt),'報酬 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
   else { // 記録（ローカルのベスト＆上位ラン）
     h+=rowHTML('🏆','ベスト '+(SAVE.best|0),'プレイ '+(SAVE.plays|0)+'回 ・ 貯金 🥤'+(SAVE.coins|0),null,'');
+    if(SAVE.maxLap>0) h+=rowHTML('🏁','最高周回 '+SAVE.maxLap,'名古屋制覇 '+(SAVE.clears|0)+'回',null,'');
     const top=SAVE.history.slice().sort((a,b)=>b.s-a.s).slice(0,5);
     if(!top.length) h+='<div class="ds" style="text-align:center;padding:16px 4px">まだ記録がありません。走ってみよう！</div>';
     const med=['🥇','🥈','🥉','4位','5位'];
     top.forEach((rn,i)=>{ const d=new Date(rn.t), ds=(d.getMonth()+1)+'/'+d.getDate();
-      h+=rowHTML(med[i],'スコア '+(rn.s|0),'距離 '+(rn.d|0)+'m ・ 🥤'+(rn.c|0)+' ・ '+ds,null,''); }); }
+      h+=rowHTML(med[i],'スコア '+(rn.s|0),'距離 '+(rn.d|0)+'m ・ 🥤'+(rn.c|0)+(rn.lap?' ・ 🏁'+rn.lap:'')+' ・ '+ds,null,''); }); }
   h+='<button class="closebtn" data-act="close">閉じる</button>'; elMenuCard.innerHTML=h; }
 function openMenu(tab){ menuTab=tab||'shop'; renderMenu(); showOv(elMenu); }
 if(elMenuCard) elMenuCard.addEventListener('click',e=>{ const el=e.target.closest('[data-tab],[data-act]'); if(!el)return;
@@ -1132,7 +1159,7 @@ function reset(){
   nextChaseAt = (SAVE.plays===0 ? 1000 : 820) + Math.random()*160;
   nextSkateAt = 520 + Math.random()*180;   // 最初のスケボーアイテム出現（取得で発動）
   nextFurnitureAt = 420 + Math.random()*120;   // 家具トラックの最初の出現
-  curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null;
+  curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null; lapCount=0;
   scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
   atkPhase='idle'; atkT=0; if(warnMesh)warnMesh.visible=false;
   if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0';
@@ -1155,7 +1182,7 @@ function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0
   window.__missEarned = evalMissions();
   window.__newBest = (score|0)>(SAVE.best||0); if(window.__newBest){ SAVE.best=score|0; }
   // ラン履歴（リバイブで続いた同一ランは更新／最大30件）
-  const rec={s:score|0,d:scroll|0,c:coinCount,t:Date.now()};
+  const rec={s:score|0,d:scroll|0,c:coinCount,t:Date.now(),lap:runStat.lap||0};
   if(reviveUsed && SAVE.history.length) SAVE.history[SAVE.history.length-1]=rec; else SAVE.history.push(rec);
   if(SAVE.history.length>30) SAVE.history=SAVE.history.slice(-30);
   save();
@@ -1178,6 +1205,13 @@ const elVig=document.getElementById('vig'), elBanner=document.getElementById('ba
 function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner.style.opacity='1';
   elBanner.style.animation='none'; void elBanner.offsetWidth; elBanner.style.animation='bpop .32s ease-out';
   clearTimeout(banner._t); banner._t=setTimeout(()=>{elBanner.style.opacity='0';}, ms||1600); }
+// 周回クリア（レベル1〜5を制覇）：大きめの祝祭＋ボーナス＋次周回はスピードアップして続行（ペプシマン式の無限周回）
+function onLapClear(n){ const bonus=500*n; score+=bonus; runStat.lap=n;
+  SAVE.maxLap=Math.max(SAVE.maxLap||0,n); SAVE.clears=(SAVE.clears||0)+1; save();
+  camShake=Math.max(camShake,0.6); flash('#fff6d0'); confetti(); confetti(); sfx('clear'); buzz(70);
+  banner(n===1?'🏁 名古屋制覇！全レベルクリア！':('🏁 周回 '+n+' 制覇！'),2600);
+  popText('周回ボーナス +'+bonus,'#ffd84a',W()/2,H()*0.34,true);
+  clearTimeout(onLapClear._t); onLapClear._t=setTimeout(()=>{ if(state==='run') banner('周回'+(n+1)+'へ… スピードアップ！',1800); },1400); }
 // 追跡者（ステージ末ごとに変わる巨大ボス）。前方視点チェイス中、背後にそびえて迫る
 // rot=モデルをプレイヤー方向へ向ける補正ヨー（既定π＝背面から正面へ。横向きモデルは±π/2）
 const PURSUERS={
@@ -1230,9 +1264,11 @@ function frame(now){
   t+=dt;
 
   if(state==='run'){
-    // ステージ切替（空・霧・速度・カーブ感が変わる）
-    const st=curStage();
-    if(st!==lastStage){ const isFirst=(lastStage===null); lastStage=st; baseSpeed=st.spd; banner(st.n,1700);
+    // ステージ切替（空・霧・速度・カーブ感が変わる）／レベル1〜5を制覇したら周回ボーナス＋次周回へ
+    const lap=lapOf(scroll), st=curStage();
+    if(lap>lapCount){ lapCount=lap; lastStage=st; baseSpeed=st.spd*(1+Math.min(lapCount,6)*0.07);
+      scene.background.set(st.sky); scene.fog.color.set(st.fog); onLapClear(lapCount); }
+    else if(st!==lastStage){ const isFirst=(lastStage===null); lastStage=st; baseSpeed=st.spd*(1+Math.min(lapCount,6)*0.07); banner(st.n,1700);
       scene.background.set(st.sky); scene.fog.color.set(st.fog);
       if(!isFirst){ flash('#fff3c8'); sfx('up',1.35); buzz(35); popText('レベルアップ！','#ffd84a',W()/2,H()*0.36,true); } }   // 切替の祝祭（開始時は除く）
     // カーブ・勾配を距離で切替（ステージの強さ上限内で）
@@ -1301,7 +1337,7 @@ function frame(now){
       elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 自己ベスト更新！</span><br>':'')
         +'スコア '+(score|0)+' &nbsp;·&nbsp; ベスト '+(SAVE.best|0)
         +'<br><span style="opacity:.85">🥤 +'+coinCount+(me?' &nbsp;+🎯'+me:'')+' &nbsp;·&nbsp; 貯金 '+(SAVE.coins|0)+'</span>'
-        +'<br><span style="font-size:13px;opacity:.7">距離 '+(runStat.dist|0)+'m ・ ニアミス '+runStat.near+' ・ 最大コンボ '+runStat.multmax.toFixed(1)+'x</span>';
+        +'<br><span style="font-size:13px;opacity:.7">距離 '+(runStat.dist|0)+'m ・ ニアミス '+runStat.near+' ・ 最大コンボ '+runStat.multmax.toFixed(1)+'x'+(runStat.lap?' ・ 🏁周回'+runStat.lap:'')+'</span>';
       if(elReviveBtn){ const rv=canRevive(); elReviveBtn.style.display=rv?'inline-block':'none'; if(rv)elReviveBtn.textContent='復活  🥤'+REVIVE_COST; }
       elOver.style.display='flex'; }
   }
@@ -1506,7 +1542,7 @@ function frame(now){
   elDist.textContent = powerT>0 ? ('⭐ スターパワー '+Math.ceil(powerT)+'s')
     : rideT>0 ? ('🛹 爆走 '+Math.ceil(rideT)+'s')
     : invertT>0 ? ('🔄 操作反転 '+Math.ceil(invertT)+'s')
-    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.b_rtruck).icon+' 逃走中！') : ((scroll|0)+' m'));
+    : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.b_rtruck).icon+' 逃走中！') : ((lapCount>0?'🏁'+lapCount+' ・ ':'')+(scroll|0)+' m'));
   // S→G 進捗バー＋ランナーマーカー＋タイマー
   if(state==='run') gameTime+=dt;
   if(elProgFill){ const pr=(scroll%STAGE_LEN)/STAGE_LEN; elProgFill.style.width=(pr*100)+'%';
@@ -1542,7 +1578,8 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
     dashes.forEach(curveMove); buildings.forEach(b=>{curveMove(b);b.userData.wins.forEach(curveMove);}); props.forEach(curveMove); landmarks.forEach(curveMove);
     renderer.render(scene,camera); },
   get deadT(){return deadT;}, render(){renderer.render(scene,camera);},
-  stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}}
+  stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}},
+  get lapCount(){return lapCount;}, get lapLen(){return LAP_LEN;}
 };
 }catch(e){window.__err=(e&&e.message)+' @@ '+((e&&e.stack)||'').split('\n').slice(1,3).join(' | ');console.error('SETUP ERR',e);} })();
 </script>
