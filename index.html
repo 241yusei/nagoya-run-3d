@@ -153,6 +153,7 @@
   #pausebtn{position:fixed;top:calc(102px + env(safe-area-inset-top));right:calc(14px + env(safe-area-inset-right));z-index:34;font-size:17px;cursor:pointer;pointer-events:auto;color:#fff;
     background:rgba(0,0,0,.32);border-radius:50%;width:38px;height:38px;display:none;align-items:center;justify-content:center}
   #reviveBtn{margin-top:10px;background:#ffd84a;color:#222;border:0;border-radius:40px;font-size:20px;font-weight:900;padding:14px 40px;cursor:pointer;box-shadow:0 8px 22px rgba(255,216,74,.4)}
+  #shareBtn{margin-top:10px;background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.5);border-radius:40px;font-size:15px;font-weight:800;padding:9px 26px;cursor:pointer}
   .setrow{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:12px;background:#1b2138;margin-bottom:8px;font-weight:800}
   .toggle{width:52px;height:28px;border-radius:16px;background:#39405e;position:relative;cursor:pointer;transition:background .2s}
   .toggle.on{background:#2a8a4a}
@@ -179,7 +180,7 @@
 <div id="combo"><b id="combomult">x1</b><span id="combocnt">コンボ</span></div>
 <div id="banner"></div>
 <div id="pausebtn" title="Pause">⏸</div>
-<div id="over"><h1>ゲームオーバー</h1><p id="ovs"></p><button id="reviveBtn">復活</button><button id="retry">リトライ</button></div>
+<div id="over"><h1>ゲームオーバー</h1><p id="ovs"></p><button id="reviveBtn">復活</button><button id="shareBtn">📤 シェア</button><button id="retry">リトライ</button></div>
 <div id="menu" class="ov"><div class="card" id="menucard"></div></div>
 <div id="daily" class="ov"><div class="card" id="dailycard"></div></div>
 <div id="pause" class="ov"><div class="card" id="pausecard"></div></div>
@@ -198,8 +199,18 @@
 </div></div>
 <script src="libs/three.min.js"></script>
 <script src="libs/GLTFLoader.js"></script>
+<script src="libs/postprocessing/Pass.js"></script>
+<script src="libs/postprocessing/CopyShader.js"></script>
+<script src="libs/postprocessing/LuminosityHighPassShader.js"></script>
+<script src="libs/postprocessing/ShaderPass.js"></script>
+<script src="libs/postprocessing/MaskPass.js"></script>
+<script src="libs/postprocessing/RenderPass.js"></script>
+<script src="libs/postprocessing/EffectComposer.js"></script>
+<script src="libs/postprocessing/UnrealBloomPass.js"></script>
 <script>
 'use strict';
+// 保険1：初期化処理が想定外の例外で早期に落ちても、12秒後には必ずローディング画面を退避させる（画面がずっと固まったままにしない）
+window.__loaderFallback=setTimeout(()=>{ const l=document.getElementById('loader'); if(l&&!l.__gone){ l.__gone=1; l.classList.add('gone'); setTimeout(()=>{ l.style.display='none'; },500); } },12000);
 (()=>{ try{
 const W=()=>innerWidth, H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
@@ -208,6 +219,14 @@ renderer.setSize(W(),H());
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=0.98;
+// GPUコンテキストロスト対策（モバイルでメモリ逼迫時に発生しうる）：黒画面のまま固まらせず、再読み込みを促す
+renderer.domElement.addEventListener('webglcontextlost',(ev)=>{ ev.preventDefault();
+  const l=document.getElementById('loader'); if(l){ l.classList.remove('gone'); l.style.display='flex';
+    l.innerHTML='<div class="ltxt">描画がリセットされました</div><div class="lsub">お手数ですが、再読み込みしてください</div>'
+      +'<button id="reloadBtn2" style="margin-top:18px;padding:11px 26px;border-radius:22px;border:none;background:#e8362e;color:#fff;font-weight:900;font-size:14px">再読み込み</button>';
+    const rb=document.getElementById('reloadBtn2'); if(rb) rb.addEventListener('click',()=>location.reload());
+  }
+},false);
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color('#8fcdf0');   // 明るい青空（カートゥーン）
@@ -216,6 +235,22 @@ scene.fog=new THREE.Fog('#d4ecf7', 160, 440);  // 薄く遠く
 const camera=new THREE.PerspectiveCamera(48, W()/H(), 0.1, 600);
 const CAM_BASE=new THREE.Vector3(0.0,4.3,9.6);   // 高め＆引き気味で道路と障害物を見やすく
 camera.position.copy(CAM_BASE);
+
+// ===== ポストプロセス（Bloom）：ネオン・スターパワー・金色演出等の発光マテリアルを実際に滲ませる =====
+// SAVE.fx===0（エフェクト軽量化・reduced-motion）の時はコストの高いBloomをスキップして renderer.render を直接使う
+let composer=null, bloomPass=null;
+try{
+  if(typeof THREE.EffectComposer==='function' && typeof THREE.UnrealBloomPass==='function'){
+    composer=new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene,camera));
+    bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(W(),H()), 0.32, 0.45, 0.88);   // 控えめに：街灯等が画面を覆って視認性を落とさないよう強度低め・閾値高め
+    composer.addPass(bloomPass);
+  }
+}catch(e){ console.warn('Bloom postprocessing unavailable, falling back to plain render', e); composer=null; bloomPass=null; }
+function renderScene(){
+  if(composer && (typeof SAVE==='undefined' || SAVE.fx!==0)){ composer.render(); }
+  else { renderer.render(scene,camera); }
+}
 
 // ===== ライト =====
 scene.add(new THREE.HemisphereLight('#dff1ff','#9a8f74',0.6));
@@ -358,7 +393,17 @@ function buildCity(){ if(cityBuilt)return; cityBuilt=true;
       g.traverse(o=>{if(o.isMesh)o.castShadow=true}); scene.add(g); props.push(g); }); }
 }
 function tryBuildCity(){ if(MODELS.shop&&MODELS.house&&MODELS.tree && LM_CART.every(c=>MODELS[c.f])) buildCity(); }
-setTimeout(buildCity, 6000);   // モデルが来なくても6秒後には生成（フォールバック）
+// 低速回線対策：モデル到着を2秒おきに3回まで再チェックしてから（最大6秒）、それでも揃わなければ今あるモデルで確定生成する
+// （旧実装は6秒固定の1回勝負で、6秒直後に届いたモデルは永久に反映されなかった）
+// 初回呼び出しもsetTimeoutで遅延させる：MODELS等はこのコードより後で宣言されるためconstのTDZに触れないよう同期実行を避ける
+function cityWatchdog(retries){
+  if(cityBuilt) return;
+  tryBuildCity();
+  if(cityBuilt) return;
+  if(retries>=3){ buildCity(); return; }
+  setTimeout(()=>cityWatchdog(retries+1), 2000);
+}
+setTimeout(()=>cityWatchdog(0), 2000);
 
 // ===== 名古屋のランドマーク（3D・遠景に配置してスクロール）=====
 const LM=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:0.8},o));
@@ -465,6 +510,17 @@ function lmArena(){
 }
 // ===== 実写ランドマーク（写真→MeshyでAI 3D化したGLBを配置）=====
 const landmarks=[];
+let goldApplied=false;
+// 周回2以降：名所を黄金色にライトアップ（新規モデル生成なしでマテリアル差し替えのみ＝周回のマンネリ対策）
+function goldifyLandmarks(){ const goldTint=new THREE.Color('#e8c349');
+  landmarks.forEach(g=>{ g.traverse(o=>{ if(o.isMesh && o.material){
+    const mats=Array.isArray(o.material)?o.material:[o.material];
+    const nm=mats.map(mt=>{ const c=mt.clone(); if(c.color)c.color.lerp(goldTint,0.5);
+      c.emissive=new THREE.Color('#5a4410'); c.emissiveIntensity=Math.max(c.emissiveIntensity||0,0.4);
+      if('metalness' in c) c.metalness=Math.min(1,(c.metalness||0)+0.5);
+      if('roughness' in c) c.roughness=Math.max(0.15,(c.roughness||0.5)-0.25);
+      return c; });
+    o.material=Array.isArray(o.material)?nm:nm[0]; } }); }); }
 // file=GLB名 / h=配置時の高さ(m) / 名古屋の名所
 const LM_GLB=[
   {file:'castle',  h:24},  // 名古屋城
@@ -549,8 +605,7 @@ new THREE.GLTFLoader().load('character/knockdown_anim.glb',(g)=>{
   console.log('knockdown loaded');
 },undefined,(e)=>console.warn('knockdown load error',e));
 // ローディング画面：メインキャラ読込完了で消す（フォールバックで12秒後にも消す）
-function hideLoader(){ const l=document.getElementById('loader'); if(l&&!l.__gone){ l.__gone=1; l.classList.add('gone'); setTimeout(()=>{ l.style.display='none'; },500); } }
-setTimeout(hideLoader,12000);
+function hideLoader(){ clearTimeout(window.__loaderFallback); const l=document.getElementById('loader'); if(l&&!l.__gone){ l.__gone=1; l.classList.add('gone'); setTimeout(()=>{ l.style.display='none'; },500); } }
 loadChar('character/nagoya_opt.glb','main',(ch)=>{ activeChar=ch; ch.holder.visible=true; modelReady=true; if(typeof applySkin==='function')applySkin(); hideLoader(); });
 loadChar('character/star_anim_opt.glb','gold');
 function setAnim(ch,name){
@@ -622,7 +677,7 @@ function mesh(g,m,y){const x=new THREE.Mesh(g,m);x.position.y=y||0;x.castShadow=
 const MODELS={};
 ['car','enemy','tree','shop','house','c_castle','c_tower','c_oasis','c_arena','c_science','c_taiyo','c_osu',
  'ex_pillar','guardrail','crane','barricade','neon','crowd',
- 'b_rtruck','b_blue','b_retro'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
+ 'b_rtruck','b_blue','b_retro','b_shachi_legend'].forEach(name=>{ new THREE.GLTFLoader().load('models/opt/'+name+'.glb',(g)=>{
   const m=g.scene; m.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.frustumCulled=false; if(o.material&&o.material.map)o.material.map.encoding=THREE.sRGBEncoding;} });
   const b=new THREE.Box3().setFromObject(m), sz=new THREE.Vector3(), c=new THREE.Vector3(); b.getSize(sz); b.getCenter(c);
   MODELS[name]={scene:m, h0:sz.y||1, cx:c.x, cz:c.z, minY:b.min.y};
@@ -632,8 +687,22 @@ function placeModel(name, targetH, faceY){
   const MD=MODELS[name]; if(!MD) return null;
   const m=MD.scene.clone(true), s=targetH/MD.h0; m.scale.setScalar(s);
   m.position.set(-MD.cx*s, -MD.minY*s, -MD.cz*s); if(faceY!=null)m.rotation.y=faceY;
+  m.userData.__shared=true;   // Meshyモデルのclone＝geometry/materialはテンプレートと共有。破棄しない目印
   return m;
 }
+// シーンから除去したオブジェクトのGPUリソースを解放（長時間プレイ・周回モードでのメモリリーク対策）。
+// __sharedな部分木（placeModelでcloneしたMeshyモデル）はテンプレートと共有しているため中身は破棄しない。
+function disposeSubtree(root){
+  if(!root) return;
+  if(root.userData && root.userData.__shared) return;
+  if(root.isMesh){
+    if(root.geometry) root.geometry.dispose();
+    const mats=Array.isArray(root.material)?root.material:(root.material?[root.material]:[]);
+    mats.forEach(mt=>{ if(mt.map)mt.map.dispose(); if(mt.emissiveMap)mt.emissiveMap.dispose(); if(mt.dispose)mt.dispose(); });
+  }
+  if(root.children) root.children.slice().forEach(disposeSubtree);
+}
+function remObj(o){ if(!o) return; scene.remove(o); disposeSubtree(o); }
 // 各種ビルダー：g.userData={act:'jump'|'slide', thr, upd(o,t)} を設定
 // 単一レーン幅は約1.4。全幅(span)はレーン3つ＝道路幅をカバー。
 // userData: act='jump'|'slide'|'dodge', thr/barY, breakable, span, upd
@@ -787,7 +856,6 @@ let hp=3; const HP_MAX=3;
 const FOV_BASE=52; let fovKick=0;
 let hitstop=0, slowmo=0;
 let mode='run', nextChaseAt=600, chaseEnd=0, chaseGap=1, pursuer=null, pursuerKind=null; // チェイス演出
-let chasePlan=[];                  // ステージ末ごとの追跡イベント発動位置
 let nextSkateAt=0;                 // 次のスケボー区間の発動位置（周期的に再出現）
 let nextFurnitureAt=0;             // 次の家具トラックの発動位置（定期出現）
 let lastSection=0;                 // 区間（難易度段階）
@@ -816,6 +884,15 @@ const LAP_LEN=STAGES[STAGES.length-1].from+(STAGES[STAGES.length-1].from-STAGES[
 function lapOf(s){ return Math.floor(s/LAP_LEN); }
 function curStage(){ const s=scroll%LAP_LEN; for(let i=STAGES.length-1;i>=0;i--) if(s>=STAGES[i].from) return STAGES[i]; return STAGES[0]; }
 let lastStage=null, lapCount=0;
+let lapHits=0, lapStartTime=0;   // 周回ランク評価用：直近の周回で被弾した回数／かかった時間
+function calcLapRank(hits, sec){ let pts=100-hits*18-Math.max(0,sec-135)*0.16;
+  return pts>=88?'S':pts>=68?'A':pts>=45?'B':'C'; }
+// 周回が進むごとに空・霧の色相を少しずつ回してマンネリを防ぐ（彩度も上げて「特別な周回」感を出す）
+const lapColorCache={};
+function lapTint(hex, lap){ if(!lap) return hex; const key=hex+'|'+lap; if(lapColorCache[key]) return lapColorCache[key];
+  const c=new THREE.Color(hex), hsl={h:0,s:0,l:0}; c.getHSL(hsl);
+  c.setHSL((hsl.h+lap*0.055)%1, Math.min(1,hsl.s+lap*0.05), hsl.l);
+  lapColorCache[key]=c; return c; }
 // ===== ステージ別テーマ装飾（Meshy）：沿道の景色をステージごとに差し替える =====
 // f=モデル名 / h=高さ / x=道路中心からの距離 / y=設置高 / both=左右両側 / over=道路上空にアーチ
 const THEME={
@@ -925,6 +1002,7 @@ function doDash(){ if(state!=='run'||paused||dashCD>0||dashT>0)return;
   dashT=DASH_DUR; dashCD=DASH_CD; invulnT=Math.max(invulnT,DASH_DUR);
   fovKick=Math.max(fovKick,22); camShake=Math.max(camShake,0.22); dashLines();
   for(let q=0;q<5;q++)spawnPop(px+(Math.random()-0.5)*0.7, 0.3+Math.random()*1.6, '#bfe6ff');   // 残像トレイル
+  spawnParticles(px,0.9,0.5,'#bfe6ff',{count:10,size:0.18,life:0.32,spread:0.6,up:0.2,grav:0.5});   // 速度線パーティクル
   sfx('dash'); sfx('near',1.5); buzz(18); }   // 二重whoosh
 addEventListener('keydown',e=>{
   if(e.repeat)return;
@@ -937,18 +1015,22 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{ if(['ArrowLeft','KeyA','ArrowRight','KeyD'].includes(e.code)) steerDir=0; });
 // タッチ：左右ホールド＝その方向へ移動 ・ 上スワイプ＝ジャンプ ・ 下スワイプ＝スライド ・ ダブルタップ＝ダッシュ
-let ptX=0,ptY=0,ptT=0,lastTap=0,steerPid=null;
+let lastTap=0,steerPid=null;
+const ptStarts=new Map();   // pointerIdごとの開始座標（マルチタッチで指を跨いでスワイプ量が壊れないように分離管理）
 function holdSteer(cx){ if(state==='run') setSteer(cx<W()*0.5?-1:1); }
 // UIボタン(BGM/ポーズ/各種ボタン/オーバーレイ)のタップでは操作入力(移動/スワイプ/ダッシュ)を発火させない
 function isUITouch(e){ return e.target && e.target.closest && e.target.closest('#bgm,#pausebtn,button,.tab,.toggle,.ov,.mbtn'); }
-addEventListener('pointerdown',e=>{ if(isUITouch(e))return; ptX=e.clientX; ptY=e.clientY; ptT=performance.now(); steerPid=e.pointerId; holdSteer(e.clientX); });
+addEventListener('pointerdown',e=>{ if(isUITouch(e))return; ptStarts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(steerPid==null){ steerPid=e.pointerId; holdSteer(e.clientX); } });
 addEventListener('pointermove',e=>{ if(state==='run' && e.pointerId===steerPid) holdSteer(e.clientX); });
-addEventListener('pointerup',e=>{ if(e.pointerId===steerPid){ steerDir=0; steerPid=null; } if(isUITouch(e)||state==='dead')return;
-  const dx=e.clientX-ptX, dy=e.clientY-ptY, adx=Math.abs(dx), ady=Math.abs(dy), now=performance.now();
+addEventListener('pointerup',e=>{ const st=ptStarts.get(e.pointerId); ptStarts.delete(e.pointerId);
+  if(e.pointerId===steerPid){ steerDir=0; steerPid=null; }
+  if(isUITouch(e)||state==='dead'||!st)return;
+  const dx=e.clientX-st.x, dy=e.clientY-st.y, adx=Math.abs(dx), ady=Math.abs(dy), now=performance.now();
   if(adx<26&&ady<26){ if(now-lastTap<320){ doDash(); lastTap=0; } else lastTap=now; } // タップ→ダブルタップでダッシュ
   else if(ady>adx){ dy<0?doJump():doSlide(); }                                        // 縦スワイプ
 });
-addEventListener('pointercancel',e=>{ if(e.pointerId===steerPid){steerDir=0;steerPid=null;} });
+addEventListener('pointercancel',e=>{ ptStarts.delete(e.pointerId); if(e.pointerId===steerPid){steerDir=0;steerPid=null;} });
 document.getElementById('retry').addEventListener('click',restart);
 // ===== スタート画面：起動時はタイトル。ボタン/画面タップ/Enter/Spaceで開始 =====
 const elStart=document.getElementById('start'), elHud=document.getElementById('hud'), elHint=document.getElementById('hint');
@@ -967,7 +1049,7 @@ showTitle();   // 初期表示
 const SAVE_KEY='nagoyaRun3D_v1';
 function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||{}; }catch(e){ return {}; } }
 const SAVE=Object.assign({ best:0, coins:0, plays:0, skin:'default', skins:['default'],
-  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1, bgmOn:1, sfxOn:1, history:[], maxLap:0, clears:0 }, loadSave());
+  up:{magnet:0,coinval:0,headstart:0,shield:0}, miss:null, daily:{date:'',streak:0}, hapt:1, fx:1, bgmOn:1, sfxOn:1, history:[], maxLap:0, clears:0, bestRank:null }, loadSave());
 if(!SAVE.up) SAVE.up={magnet:0,coinval:0,headstart:0,shield:0};
 if(!Array.isArray(SAVE.history)) SAVE.history=[];
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){} }
@@ -1087,7 +1169,7 @@ function renderMenu(){ ensureMissions();
     h+=rowHTML(t.ic,t.label(m.tgt),'報酬 🥤'+m.reward,ex,'<button disabled>'+(got?'✓':(Math.floor(cur)+'/'+m.tgt))+'</button>'); }); }
   else { // 記録（ローカルのベスト＆上位ラン）
     h+=rowHTML('🏆','ベスト '+(SAVE.best|0),'プレイ '+(SAVE.plays|0)+'回 ・ 貯金 🥤'+(SAVE.coins|0),null,'');
-    if(SAVE.maxLap>0) h+=rowHTML('🏁','最高周回 '+SAVE.maxLap,'名古屋制覇 '+(SAVE.clears|0)+'回',null,'');
+    if(SAVE.maxLap>0) h+=rowHTML('🏁','最高周回 '+SAVE.maxLap,'名古屋制覇 '+(SAVE.clears|0)+'回'+(SAVE.bestRank?' ・ 最高ランク '+SAVE.bestRank:''),null,'');
     const top=SAVE.history.slice().sort((a,b)=>b.s-a.s).slice(0,5);
     if(!top.length) h+='<div class="ds" style="text-align:center;padding:16px 4px">まだ記録がありません。走ってみよう！</div>';
     const med=['🥇','🥈','🥉','4位','5位'];
@@ -1124,7 +1206,7 @@ function canRevive(){ return !reviveUsed && SAVE.coins>=REVIVE_COST; }
 function reviveNow(){ if(reviveUsed||SAVE.coins<REVIVE_COST||state!=='dead')return; SAVE.coins-=REVIVE_COST; reviveUsed=true;
   bankedCoins=coinCount;   // ←バグ修正：復活後のランで取得したコインだけを次のgameOverで貯金する
   save();
-  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0; if(mode==='chase')endChase();
+  obstacles.forEach(o=>remObj(o)); obstacles.length=0; if(mode==='chase')endChase();
   hp=maxHP(); invulnT=2.6; knockT=0; pvx=0; py=0; vy=0; grounded=true; sliding=false; deadT=0;   // ←バグ修正：シールド込みで全回復
   state='run'; if(elOver)elOver.style.display='none'; if(elPauseBtn)elPauseBtn.style.display='flex'; if(bgmOn&&bgmStarted)fadeBgm(BGM_VOL,0.3);
   if(chars.main){activeChar=chars.main;chars.main.holder.visible=true;setAnim(chars.main,'Running');chars.main.holder.rotation.z=0;chars.main.holder.position.z=0;}
@@ -1134,18 +1216,27 @@ if(elToShop=document.getElementById('toShop')) elToShop.addEventListener('pointe
 if(elToMiss=document.getElementById('toMiss')) elToMiss.addEventListener('pointerdown',e=>{ e.stopPropagation(); openMenu('goals'); });
 if(elPauseBtn) elPauseBtn.addEventListener('click',e=>{ e.stopPropagation(); pauseGame(); });
 if(elReviveBtn) elReviveBtn.addEventListener('click',e=>{ e.stopPropagation(); reviveNow(); });
+// 結果シェア：バックエンド不要でWeb Share API（対応外はクリップボードコピーに自動フォールバック）
+const elShareBtn=document.getElementById('shareBtn');
+if(elShareBtn) elShareBtn.addEventListener('click', e=>{ e.stopPropagation();
+  const text='ナゴヤ人間RUN 3Dで '+(score|0)+' 点！'+(runStat.lap?'（周回'+runStat.lap+'）':'')+' 名古屋の街を駆け抜けろ🏃';
+  const url='https://241yusei.github.io/nagoya-run-3d/';
+  if(navigator.share){ navigator.share({text,url}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(text+' '+url).then(()=>banner('リンクをコピーしました！',1500)).catch(()=>{}); }
+});
 ensureMissions(); save();
 (function(){ const r=claimDaily(); if(r) setTimeout(()=>{ if(state==='title')showDailyPopup(r); },600); updateStartBest(); })();
 var elToShop, elToMiss;
 
 function reset(){
-  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;
-  coins.forEach(c=>scene.remove(c)); coins.length=0;
-  emeralds.forEach(e=>scene.remove(e)); emeralds.length=0;
-  skateItems.forEach(s=>scene.remove(s)); skateItems.length=0;
-  decos.forEach(d=>scene.remove(d)); decos.length=0; nextDeco=0;
-  pops.forEach(p=>scene.remove(p.m)); pops.length=0;
-  if(pursuer){scene.remove(pursuer); pursuer=null; pursuerKind=null;}
+  obstacles.forEach(o=>remObj(o)); obstacles.length=0;
+  coins.forEach(c=>remObj(c)); coins.length=0;
+  emeralds.forEach(e=>remObj(e)); emeralds.length=0;
+  skateItems.forEach(s=>remObj(s)); skateItems.length=0;
+  decos.forEach(d=>remObj(d)); decos.length=0; nextDeco=0;
+  pops.forEach(p=>remObj(p.m)); pops.length=0;
+  particleBursts.forEach(b=>{ scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); }); particleBursts.length=0;
+  if(pursuer){remObj(pursuer); pursuer=null; pursuerKind=null;}
   if(board)board.visible=false;
   scroll=(SAVE.up.headstart||0)*90; speed=baseSpeed; py=0; vy=0; grounded=true; sliding=false; slideT=0;   // ヘッドスタートで前進
   score=0; coinCount=0; nextOb=0; nextCoin=-6; powerT=0; deadT=0; gameTime=0;
@@ -1155,11 +1246,11 @@ function reset(){
   if(chars.main)chars.main.holder.scale.set(1,1,1); if(chars.gold)chars.gold.holder.scale.set(1,1,1);
   mode='run'; chaseEnd=0; chaseGap=1; baseSpeed=11; lastSection=0; chaseCam=0; camBaseX=0;
   // 追跡者は周期的に出現（頻度は控えめ＝約1100mごと）。初回はさらに後ろ倒し
-  chasePlan=[]; chaseIdx=0;
+  chaseIdx=0;
   nextChaseAt = (SAVE.plays===0 ? 1000 : 820) + Math.random()*160;
   nextSkateAt = 520 + Math.random()*180;   // 最初のスケボーアイテム出現（取得で発動）
   nextFurnitureAt = 420 + Math.random()*120;   // 家具トラックの最初の出現
-  curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null; lapCount=0;
+  curveK=0; curveTargetK=0; curveNextAt=140; slopeK=0; slopeTargetK=0; slopeNextAt=220; lastStage=null; lapCount=0; lapHits=0; lapStartTime=0;
   scene.background.set(STAGES[0].sky); scene.fog.color.set(STAGES[0].fog);
   atkPhase='idle'; atkT=0; if(warnMesh)warnMesh.visible=false;
   if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0';
@@ -1169,6 +1260,7 @@ function reset(){
   if(chars.gold)chars.gold.holder.visible=false;
   if(chars.main){chars.main.holder.visible=true; activeChar=chars.main; setAnim(chars.main,'Running'); chars.main.holder.rotation.z=0; chars.main.holder.position.z=0;}
   state='run'; elOver.style.display='none';
+  bgmAudio.playbackRate=1.0;   // ボス接近演出の名残りが次ランに残らないように念のため初期化
   if(bgmOn&&bgmStarted)fadeBgm(BGM_VOL,0.3);   // BGM音量を通常に戻す（フェード）
 }
 function restart(){ reset(); }
@@ -1191,7 +1283,7 @@ function gameOver(){ if(state==='dead')return; state='dead'; deadT=0; camShake=0
 // 障害物を吹っ飛ばす（無敵スマッシュ／ダッシュ破壊で共用）
 function smash(o){ const ud=o.userData; ud.smashed=true; ud.vx=(Math.random()-0.5)*7; ud.vy=11+Math.random()*5; ud.vz=7; ud.spin=(Math.random()-0.5)*16; }
 // 被弾（HP-1＋後方ノックバック＋ヒットストップ）。無敵中は無効
-function takeHit(){ if(invulnT>0||powerT>0||dashT>0)return; hp--; invulnT=1.1; knockT=0.5; camShake=0.55; fovKick=Math.max(fovKick,8); hitstop=3; pvx*=0.3; sfx('hit'); breakCombo(); buzz(45);
+function takeHit(){ if(invulnT>0||powerT>0||dashT>0)return; hp--; lapHits++; invulnT=1.1; knockT=0.5; camShake=0.55; fovKick=Math.max(fovKick,8); hitstop=3; pvx*=0.3; sfx('hit'); breakCombo(); buzz(45);
   if(mode==='chase') chaseGap=Math.max(0, chaseGap-0.3);
   if(hp<=0) gameOver(); }
 // 即死（穴・正面衝突など）：HP無視で一発アウト
@@ -1200,28 +1292,69 @@ function takeHitHard(){ if(powerT>0||dashT>0||invulnT>0)return; hp=0; camShake=0
 function spawnPop(x,y,col){ const m=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),
   new THREE.MeshBasicMaterial({color:col||'#ffe04a',transparent:true,depthWrite:false}));
   m.position.set(x,y,0.4); scene.add(m); pops.push({m,life:0.3,max:0.3}); }
+// 3Dパーティクルバースト（コインの輝き・着地の砂煙・ダッシュの疾走感）：Pointsで軽量に。使い終わったら確実にdispose
+const burstTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=32; const x=cv.getContext('2d');
+  const g=x.createRadialGradient(16,16,0,16,16,16); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g; x.fillRect(0,0,32,32); return new THREE.CanvasTexture(cv); })();
+const particleBursts=[];
+// スターパワー中の後光演出（キャラのボーンには付けず、頭上に独立して追従する輪＋発光板。procedural生成＝ロード失敗の心配なし）
+let starHalo=null;
+function makeStarHalo(){ const g=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.06,8,24), new THREE.MeshBasicMaterial({color:'#fff2a0',transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+  ring.rotation.x=Math.PI/2; g.add(ring);
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.7), new THREE.MeshBasicMaterial({map:burstTex,color:'#fff6c8',transparent:true,opacity:0.65,blending:THREE.AdditiveBlending,depthWrite:false}));
+  g.add(glow); g.userData={ring,glow}; g.visible=false; scene.add(g); return g; }
+function spawnParticles(x,y,z,color,opts){ if(SAVE.fx===0) return; opts=opts||{};
+  const n=opts.count||7, geo=new THREE.BufferGeometry(), pos=new Float32Array(n*3), vel=[];
+  for(let i=0;i<n;i++){ pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+    vel.push(new THREE.Vector3((Math.random()-0.5)*(opts.spread||2.0), (opts.up!=null?opts.up:1.4)+Math.random()*1.6, (Math.random()-0.5)*(opts.spread||2.0))); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat=new THREE.PointsMaterial({color:color||'#ffe08a', size:opts.size||0.22, map:burstTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending});
+  const pts=new THREE.Points(geo,mat); scene.add(pts);
+  particleBursts.push({pts,vel,life:opts.life||0.5,max:opts.life||0.5,grav:opts.grav!=null?opts.grav:4.0}); }
+function updateParticleBursts(dt){
+  for(let i=particleBursts.length-1;i>=0;i--){ const b=particleBursts[i]; b.life-=dt;
+    if(b.life<=0){ scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); particleBursts.splice(i,1); continue; }
+    const pos=b.pts.geometry.attributes.position.array;
+    for(let k=0;k<b.vel.length;k++){ b.vel[k].y-=b.grav*dt; pos[k*3]+=b.vel[k].x*dt; pos[k*3+1]+=b.vel[k].y*dt; pos[k*3+2]+=b.vel[k].z*dt; }
+    b.pts.geometry.attributes.position.needsUpdate=true;
+    b.pts.material.opacity=Math.max(0,b.life/b.max); } }
 // 追跡（緊張）演出：加速＋赤ビネット＋バナー＋捕獲メーター。巨大金鯱の前方視点演出は次フェーズ。
 const elVig=document.getElementById('vig'), elBanner=document.getElementById('banner'), elGap=document.getElementById('gapbar');
-function banner(txt,ms){ if(!elBanner)return; elBanner.textContent=txt; elBanner.style.opacity='1';
+// important=true のバナーは、直前のimportantバナーの表示中は上書きせず終了を待ってから出す
+// （周回クリア演出とボス出現演出がほぼ同時に発火して片方が一瞬で消える競合を回避）
+let bannerLockUntil=0;
+function banner(txt,ms,important){ if(!elBanner)return; const now=performance.now();
+  if(important && now<bannerLockUntil){ clearTimeout(banner._qt); banner._qt=setTimeout(()=>banner(txt,ms,important), bannerLockUntil-now+150); return; }
+  if(important) bannerLockUntil=now+(ms||1600);
+  elBanner.textContent=txt; elBanner.style.opacity='1';
   elBanner.style.animation='none'; void elBanner.offsetWidth; elBanner.style.animation='bpop .32s ease-out';
   clearTimeout(banner._t); banner._t=setTimeout(()=>{elBanner.style.opacity='0';}, ms||1600); }
 // 周回クリア（レベル1〜5を制覇）：大きめの祝祭＋ボーナス＋次周回はスピードアップして続行（ペプシマン式の無限周回）
-function onLapClear(n){ const bonus=500*n; score+=bonus; runStat.lap=n;
-  SAVE.maxLap=Math.max(SAVE.maxLap||0,n); SAVE.clears=(SAVE.clears||0)+1; save();
+function onLapClear(n){ const rank=calcLapRank(lapHits, gameTime-lapStartTime);
+  const rankBonus={S:400,A:200,B:80,C:0}[rank]; const bonus=500*n+rankBonus; score+=bonus; runStat.lap=n;
+  SAVE.maxLap=Math.max(SAVE.maxLap||0,n); SAVE.clears=(SAVE.clears||0)+1;
+  if(!SAVE.bestRank || 'SABC'.indexOf(rank)<'SABC'.indexOf(SAVE.bestRank)) SAVE.bestRank=rank;
+  save();
   camShake=Math.max(camShake,0.6); flash('#fff6d0'); confetti(); confetti(); sfx('clear'); buzz(70);
-  banner(n===1?'🏁 名古屋制覇！全レベルクリア！':('🏁 周回 '+n+' 制覇！'),2600);
+  banner(n===1?'🏁 名古屋制覇！全レベルクリア！':('🏁 周回 '+n+' 制覇！'),2600,true);
   popText('周回ボーナス +'+bonus,'#ffd84a',W()/2,H()*0.34,true);
-  clearTimeout(onLapClear._t); onLapClear._t=setTimeout(()=>{ if(state==='run') banner('周回'+(n+1)+'へ… スピードアップ！',1800); },1400); }
+  const rankCol={S:'#ffd84a',A:'#9fe8ff',B:'#a0e0a0',C:'#e0e0e0'}[rank];
+  clearTimeout(onLapClear._rt); onLapClear._rt=setTimeout(()=>{ popText('ランク '+rank,rankCol,W()/2,H()*0.44,true); sfx(rank==='S'?'star':'up'); },600);
+  lapHits=0; lapStartTime=gameTime;   // 次の周回の被弾数・タイム計測をリセット
+  clearTimeout(onLapClear._t); onLapClear._t=setTimeout(()=>{ if(state==='run') banner('周回'+(n+1)+'へ… スピードアップ！',1800,true); },1400); }
 // 追跡者（ステージ末ごとに変わる巨大ボス）。前方視点チェイス中、背後にそびえて迫る
 // rot=モデルをプレイヤー方向へ向ける補正ヨー（既定π＝背面から正面へ。横向きモデルは±π/2）
 const PURSUERS={
   b_rtruck:{f:'b_rtruck', h:4.8, rot:-Math.PI/2, lift:0.12, pitchK:0.3, msg:'暴走ダンプが来た！横に避けろ！',   icon:'🚛'},
   b_blue:  {f:'b_blue',   h:6.8, rot:Math.PI,    lift:0.08, pitchK:0.5, msg:'青ヒゲ番長が追ってきた！避けろ！', icon:'🧥'},
   b_retro: {f:'b_retro',  h:6.8, rot:Math.PI,    lift:0.08, pitchK:0.5, msg:'レトロおじが来た！横に避けろ！',   icon:'🕶️'},
+  b_shachi_legend:{f:'b_shachi_legend', h:8.8, rot:Math.PI, lift:0.1, pitchK:0.4, msg:'黄金の鯱神が目覚めた…！伝説の逃走だ！', icon:'✨'},
 };
-// 追跡者は3体をローテーション（出現頻度は控えめ）
+// 追跡者は3体をローテーション（出現頻度は控えめ）。周回3以降は低確率で隠しボス（黄金の鯱神）が代わりに出現
 const BOSS_ROT=['b_rtruck','b_blue','b_retro']; let chaseIdx=0;
-function stageChaseKind(){ return BOSS_ROT[(chaseIdx++)%BOSS_ROT.length]; }
+function stageChaseKind(){ if(lapCount>=3 && MODELS.b_shachi_legend && Math.random()<0.4) return 'b_shachi_legend';
+  return BOSS_ROT[(chaseIdx++)%BOSS_ROT.length]; }
 function makePursuer(kind){ const cfg=PURSUERS[kind]||PURSUERS.b_rtruck; const g=new THREE.Group();
   const m=placeModel(cfg.f, cfg.h, cfg.rot!=null?cfg.rot:Math.PI);   // Meshyモデル・大きく・プレイヤー方向へ
   if(m){ m.traverse(o=>{if(o.isMesh)o.castShadow=false}); g.add(m); }
@@ -1237,15 +1370,18 @@ function makeWarn(){ const g=new THREE.Group();
 }
 let atkPhase='idle', atkT=0, atkX=0, warnMesh=null;
 function startChase(kind){ kind=kind||stageChaseKind(); mode='chase'; chaseGap=1; chaseEnd=scroll+360; sfx('chase');
-  obstacles.forEach(o=>scene.remove(o)); obstacles.length=0;   // チェイス中は通常障害物なし＝追跡者だけに集中
+  obstacles.forEach(o=>remObj(o)); obstacles.length=0;   // チェイス中は通常障害物なし＝追跡者だけに集中
   rideT=0; if(board)board.visible=false;                       // スケボー中なら解除
-  if(!pursuer || pursuerKind!==kind){ if(pursuer)scene.remove(pursuer); pursuer=makePursuer(kind); pursuerKind=kind; scene.add(pursuer); }
+  if(!pursuer || pursuerKind!==kind){ if(pursuer)remObj(pursuer); pursuer=makePursuer(kind); pursuerKind=kind; scene.add(pursuer); }
   pursuer.visible=true; pursuer.position.set(0,3.6,10.5); pursuer.rotation.set(0,0,0);
   if(!warnMesh){ warnMesh=makeWarn(); scene.add(warnMesh); } warnMesh.visible=false;
   atkPhase='idle'; atkT=1.0;
-  if(elGap)elGap.parentElement.style.opacity='1'; banner((PURSUERS[kind]||PURSUERS.b_rtruck).msg,2000); }
+  // ボス接近の緊張演出：BGMのテンポと音量を一時的に上げる（曲を止めずに迫力だけ増す＝ペプシマン式の対比）
+  if(bgmOn && bgmAudio){ bgmAudio.playbackRate=1.12; bgmAudio.volume=Math.min(1,BGM_VOL*1.25); }
+  if(elGap)elGap.parentElement.style.opacity='1'; banner((PURSUERS[kind]||PURSUERS.b_rtruck).msg,2000,true); }
 function endChase(){ mode='run'; nextChaseAt=scroll+740+Math.random()*260;   // 次の追跡まで間隔広め（頻度を半減）
   if(pursuer)pursuer.visible=false; if(warnMesh)warnMesh.visible=false;
+  if(bgmOn && bgmAudio){ bgmAudio.playbackRate=1.0; bgmAudio.volume=BGM_VOL; }
   if(elVig)elVig.style.opacity='0'; if(elGap)elGap.parentElement.style.opacity='0'; banner('逃げ切った！',1500); }
 
 // キャラのAABB（当たり判定用の高さ）
@@ -1258,8 +1394,8 @@ function charBox(){
 function frame(now){
   requestAnimationFrame(frame);
   let dt=Math.min(0.033,(now-(frame.last||now))/1000); frame.last=now;
-  if(paused){ renderer.render(scene,camera); return; }                // ポーズ中はワールド停止
-  if(hitstop>0){ hitstop--; renderer.render(scene,camera); return; } // 衝撃の一瞬停止
+  if(paused){ renderScene(); return; }                // ポーズ中はワールド停止
+  if(hitstop>0){ hitstop--; renderScene(); return; } // 衝撃の一瞬停止
   if(slowmo>0){ slowmo-=dt; if(SAVE.fx!==0)dt*=0.4; }                // クラッシュ直後スロー（reduced-motionでは無効）
   t+=dt;
 
@@ -1267,9 +1403,11 @@ function frame(now){
     // ステージ切替（空・霧・速度・カーブ感が変わる）／レベル1〜5を制覇したら周回ボーナス＋次周回へ
     const lap=lapOf(scroll), st=curStage();
     if(lap>lapCount){ lapCount=lap; lastStage=st; baseSpeed=st.spd*(1+Math.min(lapCount,6)*0.07);
-      scene.background.set(st.sky); scene.fog.color.set(st.fog); onLapClear(lapCount); }
+      scene.background.set(lapTint(st.sky,lapCount)); scene.fog.color.set(lapTint(st.fog,lapCount));
+      if(lapCount>=2 && !goldApplied){ goldApplied=true; goldifyLandmarks(); }
+      onLapClear(lapCount); }
     else if(st!==lastStage){ const isFirst=(lastStage===null); lastStage=st; baseSpeed=st.spd*(1+Math.min(lapCount,6)*0.07); banner(st.n,1700);
-      scene.background.set(st.sky); scene.fog.color.set(st.fog);
+      scene.background.set(lapTint(st.sky,lapCount)); scene.fog.color.set(lapTint(st.fog,lapCount));
       if(!isFirst){ flash('#fff3c8'); sfx('up',1.35); buzz(35); popText('レベルアップ！','#ffd84a',W()/2,H()*0.36,true); } }   // 切替の祝祭（開始時は除く）
     // カーブ・勾配を距離で切替（ステージの強さ上限内で）
     if(scroll>curveNextAt){ curveNextAt=scroll+90+Math.random()*120;
@@ -1288,7 +1426,7 @@ function frame(now){
     if(scroll-lastMilestone>=500){ lastMilestone+=500; banner(lastMilestone+'m! 🎉',1300); confetti(); sfx('up'); camShake=Math.max(camShake,0.32);
       const bonus=50; score+=bonus; popText('ボーナス +'+bonus,'#ffd84a',W()/2,H()*0.4,true); buzz(40); }
     // ジャンプ物理（着地でスクワッシュ）
-    if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true; squashT=0.16; squashKind=-1; if(rideT<=0)buzz(10);}}
+    if(!grounded){vy-=GRAV*dt; py+=vy*dt; if(py<=0){py=0;vy=0;grounded=true; squashT=0.16; squashKind=-1; if(rideT<=0){buzz(10); spawnParticles(px,0.05,0.3,'#d8d2c2',{count:6,size:0.3,life:0.35,spread:1.6,up:0.5,grav:2.5});}}}
     if(sliding){slideT-=dt; if(slideT<=0)sliding=false;}
     // 各種タイマー
     if(dashT>0)dashT-=dt; if(dashCD>0)dashCD-=dt; if(invulnT>0)invulnT-=dt;
@@ -1306,7 +1444,10 @@ function frame(now){
       if(starsPlan.length && scroll>starsPlan[0]){ spawnEmerald(SPZ-4); starsPlan.shift(); }
       if(THEME[st.n]){ nextDeco+=speed*dt; if(nextDeco>0){ spawnDeco(st); nextDeco=-THEME[st.n].gap; } }  // ステージ別テーマ装飾
     }
-    if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0; }
+    if(powerT>0){ powerT-=dt; if(powerT<0)powerT=0;
+      if(!starHalo)starHalo=makeStarHalo(); starHalo.visible=(SAVE.fx!==0);
+      starHalo.position.set(px,py+2.3,0.3); starHalo.rotation.y+=dt*3; starHalo.userData.ring.rotation.z+=dt*2.4;
+    } else if(starHalo){ starHalo.visible=false; }
     // スケボー区間の発動（高速・橋あたりの下り爆走）
     // スケボーアイテムを定期的に出現（取得するとスケボー発動）
     if(mode==='run' && rideT<=0 && scroll>nextSkateAt){ spawnSkateItem(SPZ-4); nextSkateAt = scroll + 780 + Math.random()*320; }
@@ -1321,7 +1462,7 @@ function frame(now){
       else if(atkPhase==='tele' && atkT<=0){ atkPhase='strike'; atkT=0.3;
         const dodged = Math.abs(px-atkX)>1.3 || powerT>0 || invulnT>0;
         if(!dodged){ // 噛みつき命中：HP-1＋メーター減少。HP0で捕食(ゲームオーバー)
-          hp--; chaseGap=Math.max(0,chaseGap-0.34); knockT=0.5; camShake=0.55; hitstop=2; invulnT=0.85; pvx*=0.3; fovKick=Math.max(fovKick,8); sfx('hit');
+          hp--; lapHits++; chaseGap=Math.max(0,chaseGap-0.34); knockT=0.5; camShake=0.55; hitstop=2; invulnT=0.85; pvx*=0.3; fovKick=Math.max(fovKick,8); sfx('hit');
           if(hp<=0){ gameOver(); } }
         else { score+=25; camShake=0.12; } }
       else if(atkPhase==='strike' && atkT<=0){ atkPhase='rec'; atkT=0.55; if(warnMesh)warnMesh.visible=false; }
@@ -1334,7 +1475,9 @@ function frame(now){
     deadT+=dt;
     if(deadT>1.4 && elOver.style.display!=='flex'){
       const me=window.__missEarned||0;
-      elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 自己ベスト更新！</span><br>':'')
+      const pct=(!window.__newBest && SAVE.best>0) ? Math.max(0,Math.round((1-score/SAVE.best)*100)) : 0;
+      elOvs.innerHTML=(window.__newBest?'<span style="color:#ffd84a;font-weight:900">🏆 自己ベスト更新！</span><br>'
+          :(pct>0&&pct<=15)?'<span style="color:#9fe8ff;font-weight:800">あと'+pct+'%でハイスコア！もう一走り！</span><br>':'')
         +'スコア '+(score|0)+' &nbsp;·&nbsp; ベスト '+(SAVE.best|0)
         +'<br><span style="opacity:.85">🥤 +'+coinCount+(me?' &nbsp;+🎯'+me:'')+' &nbsp;·&nbsp; 貯金 '+(SAVE.coins|0)+'</span>'
         +'<br><span style="font-size:13px;opacity:.7">距離 '+(runStat.dist|0)+'m ・ ニアミス '+runStat.near+' ・ 最大コンボ '+runStat.multmax.toFixed(1)+'x'+(runStat.lap?' ・ 🏁周回'+runStat.lap:'')+'</span>';
@@ -1395,7 +1538,7 @@ function frame(now){
     if(ud.smashed){
       o.position.x+=ud.vx*dt; o.position.y+=ud.vy*dt; o.position.z+=ud.vz*dt; ud.vy-=GRAV*dt;
       o.rotation.x+=ud.spin*dt; o.rotation.z+=ud.spin*0.6*dt;
-      if(o.position.y<-7||o.position.z>16){scene.remove(o);obstacles.splice(i,1);} continue;
+      if(o.position.y<-7||o.position.z>16){remObj(o);obstacles.splice(i,1);} continue;
     }
     if(ud.upd && state==='run') ud.upd(o, t, dt, speed);
     // カーブ・勾配を反映（足元z≈0ではオフセット0＝判定に影響なし）
@@ -1423,7 +1566,7 @@ function frame(now){
         const q=['ナイス！','スレスレ！','あぶなっ！','うまい！','やるがや！','ええ根性だ！'][(Math.random()*6)|0];
         const s=toScreen(o.position); popText(q+' +'+gain,'#9fe8ff',s.x,s.y-10); }
     }
-    if(!ud.smashed && o.position.z>12){scene.remove(o); obstacles.splice(i,1);}
+    if(!ud.smashed && o.position.z>12){remObj(o); obstacles.splice(i,1);}
   }
   // コイン（光る金貨）：レーンが合っていれば取得。25個で1UP
   const magR=1.8+(SAVE.up.magnet||0)*1.5;   // コインマグネット（基本1.8＋ショップ強化）
@@ -1437,12 +1580,13 @@ function frame(now){
         coinCount++; score+=gain;
         const s=toScreen(c.position); popText('+'+gain,'#ffd84a',s.x,s.y);
         for(let q=0;q<5;q++)spawnPop(c.position.x+(Math.random()-0.5)*0.5,c.position.y+(Math.random()-0.5)*0.5,'#ffe88a');
+        spawnParticles(c.position.x,c.position.y,c.position.z,'#ffe08a',{count:6,size:0.14,life:0.4,spread:1.3,up:1.6,grav:5});
         camShake=Math.max(camShake,0.09); sfx('coin', 1+Math.min(combo,14)*0.05);
         if(combo>1 && combo%5===0){ popText(combo+' コンボ!','#ffd84a',s.x,s.y-34,true); sfx('up',1.2); }
         if(coinCount%25===0 && hp<maxHP()){ hp++; fovKick=Math.max(fovKick,6); banner('1UP!',1000); sfx('up'); buzz(30); }
-        scene.remove(c); coins.splice(i,1); continue; }
+        remObj(c); coins.splice(i,1); continue; }
     }
-    if(c.position.z>12){scene.remove(c); coins.splice(i,1);}
+    if(c.position.z>12){remObj(c); coins.splice(i,1);}
   }
   // エメラルドの星（取ると20秒間 金スターに変身）
   for(let i=emeralds.length-1;i>=0;i--){const e=emeralds[i];
@@ -1450,9 +1594,9 @@ function frame(now){
     e.userData.glow.lookAt(camera.position); curveMove(e);   // カーブ/勾配
     if(e.userData.alive && Math.abs(e.position.z)<0.95 && Math.abs(px-e.position.x)<1.1){
       const ey=e.position.y; if(ey>cb.bottom-0.6 && ey<cb.top+0.7){
-        e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'スターパワー！','#5ff0b0',true); banner('⭐ 無敵だ！敵を突き破れ！',1500); flash('#cfffe6'); confetti(); sfx('star'); buzz(40); scene.remove(e); emeralds.splice(i,1); continue; }
+        e.userData.alive=false; powerT=10; score+=100; camShake=0.35; spawnPop(e.position.x,e.position.y,'#5ff0b0'); popWorld(e.position,'スターパワー！','#5ff0b0',true); banner('⭐ 無敵だ！敵を突き破れ！',1500); flash('#cfffe6'); confetti(); sfx('star'); buzz(40); remObj(e); emeralds.splice(i,1); continue; }
     }
-    if(e.position.z>12){scene.remove(e); emeralds.splice(i,1);}
+    if(e.position.z>12){remObj(e); emeralds.splice(i,1);}
   }
   // スケボーアイテム（取得で下り爆走スタート）
   for(let i=skateItems.length-1;i>=0;i--){const it=skateItems[i];
@@ -1460,14 +1604,15 @@ function frame(now){
     it.userData.glow.lookAt(camera.position); curveMove(it);
     if(it.userData.alive && Math.abs(it.position.z)<1.0 && Math.abs(px-it.position.x)<1.25){
       const iy=it.position.y; if(iy>cb.bottom-0.8 && iy<cb.top+0.9){
-        it.userData.alive=false; spawnPop(it.position.x,it.position.y,'#ff9a3a'); popWorld(it.position,'🛹 GET!','#ff9a3a',true); startSkate(); scene.remove(it); skateItems.splice(i,1); continue; }
+        it.userData.alive=false; spawnPop(it.position.x,it.position.y,'#ff9a3a'); popWorld(it.position,'🛹 GET!','#ff9a3a',true); startSkate(); remObj(it); skateItems.splice(i,1); continue; }
     }
-    if(it.position.z>12){scene.remove(it); skateItems.splice(i,1);}
+    if(it.position.z>12){remObj(it); skateItems.splice(i,1);}
   }
   // 取得演出（拡大して消える小球）
   for(let i=pops.length-1;i>=0;i--){const p=pops[i]; p.life-=dt; const k=1-p.life/p.max;
     p.m.scale.setScalar(0.5+k*2.0); p.m.material.opacity=Math.max(0,1-k); p.m.position.z+=ws*dt*0.4;
-    if(p.life<=0){scene.remove(p.m); pops.splice(i,1);} }
+    if(p.life<=0){remObj(p.m); pops.splice(i,1);} }
+  updateParticleBursts(dt);
 
   // 道路ペイント・ビルのスクロール
   roadTex.offset.y -= ws*dt/ROAD_TILE;   // アスファルト面が流れて見える
@@ -1483,7 +1628,7 @@ function frame(now){
     if(g.position.z>40) g.position.z-=g.userData.span; curveMove(g); });
   // ステージ別テーマ装飾（高架・橋・クレーン・ネオン等）のスクロール
   for(let i=decos.length-1;i>=0;i--){ const d=decos[i]; d.position.z+=ws*dt; curveMove(d);
-    if(d.position.z>NEARZ+10){ scene.remove(d); decos.splice(i,1); } }
+    if(d.position.z>NEARZ+10){ remObj(d); decos.splice(i,1); } }
 
   // カメラ：通常＝中央背後で道路を真っ直ぐ／チェイス＝前方から振り返る。遷移は滑らかに補間、揺れは別加算
   chaseCam += ((mode==='chase'?1:0)-chaseCam)*(1-Math.exp(-7*dt));
@@ -1543,19 +1688,20 @@ function frame(now){
     : rideT>0 ? ('🛹 爆走 '+Math.ceil(rideT)+'s')
     : invertT>0 ? ('🔄 操作反転 '+Math.ceil(invertT)+'s')
     : (mode==='chase' ? ((PURSUERS[pursuerKind]||PURSUERS.b_rtruck).icon+' 逃走中！') : ((lapCount>0?'🏁'+lapCount+' ・ ':'')+(scroll|0)+' m'));
-  // S→G 進捗バー＋ランナーマーカー＋タイマー
+  // S→G 進捗バー＋ランナーマーカー＋タイマー（現在のレベル内での進み具合＝周回モードでも自然にループ）
   if(state==='run') gameTime+=dt;
-  if(elProgFill){ const pr=(scroll%STAGE_LEN)/STAGE_LEN; elProgFill.style.width=(pr*100)+'%';
-    if(elProgRun) elProgRun.style.left=(pr*100)+'%'; }
+  if(elProgFill){ const cs=curStage(), idx=STAGES.indexOf(cs), segStart=cs.from, segEnd=(idx<STAGES.length-1)?STAGES[idx+1].from:LAP_LEN;
+    const pr=Math.max(0,Math.min(1,((scroll%LAP_LEN)-segStart)/(segEnd-segStart)));
+    elProgFill.style.width=(pr*100)+'%'; if(elProgRun) elProgRun.style.left=(pr*100)+'%'; }
   if(elTimer){ const tt=gameTime|0; elTimer.textContent=(tt/60|0)+':'+('0'+(tt%60)).slice(-2); }
 
-  renderer.render(scene,camera);
+  renderScene();
 }
 let camShake=0, prevPowerT=0, gameTime=0;
-const STAGE_LEN=800;
 const elHp=document.getElementById('hp'), elProgFill=document.getElementById('progfill'),
       elProgRun=document.getElementById('progrun'), elTimer=document.getElementById('timer');
-addEventListener('resize',()=>{camera.aspect=W()/H();camera.updateProjectionMatrix();renderer.setSize(W(),H());});
+addEventListener('resize',()=>{camera.aspect=W()/H();camera.updateProjectionMatrix();renderer.setSize(W(),H());
+  if(composer){ composer.setSize(W(),H()); if(bloomPass)bloomPass.resolution.set(W(),H()); }});
 requestAnimationFrame(frame);
 window.__3D={scene,camera,renderer,get model(){return activeChar&&activeChar.holder}};
 window.__game={get state(){return state}, get obstacles(){return obstacles}, get py(){return py},
@@ -1576,12 +1722,24 @@ window.__game={get state(){return state}, get obstacles(){return obstacles}, get
   spawnAt(kind,x,z){spawnObAt(kind,x,z==null?SPZ:z);}, get decos(){return decos;},
   previewCurve(){ updateStrips(); obstacles.forEach(curveMove); coins.forEach(curveMove); emeralds.forEach(curveMove);
     dashes.forEach(curveMove); buildings.forEach(b=>{curveMove(b);b.userData.wins.forEach(curveMove);}); props.forEach(curveMove); landmarks.forEach(curveMove);
-    renderer.render(scene,camera); },
-  get deadT(){return deadT;}, render(){renderer.render(scene,camera);},
+    renderScene(); },
+  get deadT(){return deadT;}, render(){renderScene();},
   stepChar(n){const ch=activeChar; for(let k=0;k<(n||10);k++){ch.mixer.update(1/30); if(ch.hips&&ch.hipsBind){ch.hips.position.x=ch.hipsBind.x;ch.hips.position.z=ch.hipsBind.z;}}},
-  get lapCount(){return lapCount;}, get lapLen(){return LAP_LEN;}
+  get lapCount(){return lapCount;}, get lapLen(){return LAP_LEN;},
+  get bloomPass(){return bloomPass;}, get composer(){return composer;}
 };
-}catch(e){window.__err=(e&&e.message)+' @@ '+((e&&e.stack)||'').split('\n').slice(1,3).join(' | ');console.error('SETUP ERR',e);} })();
+}catch(e){
+  window.__err=(e&&e.message)+' @@ '+((e&&e.stack)||'').split('\n').slice(1,3).join(' | ');
+  console.error('SETUP ERR',e);
+  clearTimeout(window.__loaderFallback);
+  // 保険2：初期化が例外で止まった場合、真っ白/固まったままにせず再読み込みを促す
+  const l=document.getElementById('loader');
+  if(l){ l.classList.remove('gone'); l.style.display='flex';
+    l.innerHTML='<div class="ltxt">読み込みに失敗しました</div><div class="lsub">お手数ですが、もう一度お試しください</div>'
+      +'<button id="reloadBtn" style="margin-top:18px;padding:11px 26px;border-radius:22px;border:none;background:#e8362e;color:#fff;font-weight:900;font-size:14px">再読み込み</button>';
+    const rb=document.getElementById('reloadBtn'); if(rb) rb.addEventListener('click',()=>location.reload());
+  }
+} })();
 </script>
 <script>
 /* PWA: Service Worker登録（インストール可・オフライン・再訪高速化）*/

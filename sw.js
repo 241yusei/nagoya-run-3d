@@ -1,15 +1,20 @@
 // ナゴヤ人間RUN 3D — Service Worker（HTMLはネット優先で常に最新／重いアセットはキャッシュ優先で高速＆オフライン対応）
-const V = 'nagoya-run-v3';
+// 資産を更新した時は必ずVをインクリメントする（旧キャッシュを破棄して新しいアセットに切り替えるため）
+const V = 'nagoya-run-v4';
 const CORE = [
   './', './index.html',
   './libs/three.min.js', './libs/GLTFLoader.js',
+  './libs/postprocessing/Pass.js', './libs/postprocessing/CopyShader.js', './libs/postprocessing/LuminosityHighPassShader.js',
+  './libs/postprocessing/ShaderPass.js', './libs/postprocessing/MaskPass.js', './libs/postprocessing/RenderPass.js',
+  './libs/postprocessing/EffectComposer.js', './libs/postprocessing/UnrealBloomPass.js',
   './character/nagoya_opt.glb', './character/star_anim_opt.glb', './character/knockdown_anim.glb',
   './ui/hero_head.png', './ui/hero_full.png', './ui/road.jpg',
   './manifest.json', './icons/icon-192.png', './icons/icon-512.png'
 ];
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(V).then(c => c.addAll(CORE).catch(() => {})));
+  // addAllは1件でも404/失敗すると全体が無音で失敗する（＝オフライン対応が丸ごと機能しなくなる）ため、1件ずつ独立してキャッシュする
+  e.waitUntil(caches.open(V).then(c => Promise.all(CORE.map(url => c.add(url).catch(() => {})))));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(

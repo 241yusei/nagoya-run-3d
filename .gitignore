@@ -5,6 +5,7 @@
 facades/
 landmarks/
 models/*.glb
+models/raw/
 character/*
 !character/nagoya_opt.glb
 !character/star_anim_opt.glb
